@@ -1,63 +1,53 @@
-# CampusPrint Printer Agent
+# CampusPrint Printer Agent (Windows Service Edition)
 
-This is a standalone Node.js application that runs on your local computer at the shop to automatically fetch print jobs from your CampusPrint backend and send them directly to your physical printer. 
-
-It completely bypasses the browser print dialog to enable a fully automated print queue system.
-
-## 🚀 Installation
-
-1. Make sure you have **Node.js** installed on your Windows machine ([Download Node.js](https://nodejs.org/)).
-2. Open a terminal or command prompt in this directory (`printer-agent`).
-3. Run the following command to install dependencies:
-   ```cmd
-   npm install
-   ```
-
-## ⚙️ Configuration
-
-Open the `config.js` file in any text editor. It contains the following properties:
-
-```javascript
-module.exports = {
-  // Production Render Backend API URL (default)
-  apiUrl: process.env.API_URL || 'https://campusprint-backend-bl6p.onrender.com/api', 
-
-  // The name of your physical printer in Windows Settings
-  printerName: process.env.PRINTER_NAME || 'Microsoft Print to PDF', 
-
-  // How often to check for new jobs (in milliseconds)
-  pollIntervalMs: 3000, 
-
-  // Folder where files are temporarily downloaded
-  tempDir: path.join(__dirname, 'temp'), 
-};
-```
-
-### Changing the Printer Name
-By default, this is set to use **Microsoft Print to PDF** for testing. 
-
-To connect your **shop printer** (e.g., Canon, Epson, HP):
-1. Open Windows Settings on your shop computer.
-2. Go to **Bluetooth & devices > Printers & scanners**.
-3. Find the exact name of your active printer (e.g., `Canon LBP2900`).
-4. Copy that EXACT name and update `printerName` in `config.js`.
+A high-reliability, lightweight Node.js daemon designed for continuous operation on college print-shop PCs. It automatically polls your CampusPrint backend for print queue items and sends them directly to your physical printer without browser intervention.
 
 ---
 
-## ▶️ Running the Agent
+## 🛡️ Enterprise Features
 
-To start the automated printer agent, run:
-```cmd
-npm start
+- **⚡ Native Windows Service**: Installs into Windows `services.msc` to start automatically on system boot before user login.
+- **🔒 Single-Instance Protection**: Prevents duplicate instances via localhost port locking (`port 39201`).
+- **🔄 Auto-Reconnection & Backoff**: Automatically handles network outages, Wi-Fi drops, or Render backend cold starts with smooth exponential backoff.
+- **📄 Resilient Error Recovery**: Unblocks print queue on job failures so subsequent documents print seamlessly.
+- **📝 Persistent File Logging**: Writes real-time diagnostic logs to `logs/agent.log`.
+
+---
+
+## 🛠️ Quick Installation & Setup
+
+1. **Install Node.js**: Ensure Node.js (v18+) is installed on your Windows shop PC ([Download Node.js](https://nodejs.org/)).
+2. **Install Dependencies**:
+   Open Command Prompt in `printer-agent` and run:
+   ```cmd
+   npm install
+   ```
+3. **Configure Printer & API** in `config.js`:
+   ```javascript
+   module.exports = {
+     apiUrl: process.env.API_URL || 'https://campusprint-backend-bl6p.onrender.com/api',
+     printerName: process.env.PRINTER_NAME || 'Your Shop Printer Name',
+     pollIntervalMs: 3000,
+   };
+   ```
+
+---
+
+## 🚀 Installation Options
+
+### Option 1: Native Windows Service (Recommended for Shop Production)
+Runs completely silently in the background, starts on system reboot, and auto-restarts on failure.
+
+1. Right-click **`install-service.bat`** and select **Run as administrator**.
+2. To uninstall the service at any time, right-click **`uninstall-service.bat`** and select **Run as administrator**.
+
+### Option 2: Stop / Restart Agent
+- Double-click **`stop-agent.bat`** to safely terminate the running agent process or service.
+
+---
+
+## 📊 Viewing Logs
+Diagnostic logs are written in real-time to:
+```text
+printer-agent/logs/agent.log
 ```
-*Or run `node index.js`.*
-
-The application will begin polling your backend API every 3 seconds for new `ReadyToPrint` jobs. 
-
-**Workflow:**
-1. When a customer uploads a document, the job is saved as `Pending`.
-2. When you click **Print** on the Admin dashboard (`/admin`), the job status updates to `ReadyToPrint`.
-3. The printer agent detects the job, downloads the file, and automatically prints it on your physical printer.
-4. The job status automatically updates to `Completed` on the dashboard, and the local temporary file is cleaned up.
-
-If you ever need to stop the agent, press `Ctrl + C` in the terminal window.

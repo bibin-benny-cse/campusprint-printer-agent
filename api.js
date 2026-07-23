@@ -5,6 +5,7 @@ const config = require('./config');
 
 const apiClient = axios.create({
   baseURL: config.apiUrl,
+  timeout: 15000, // 15-second request timeout
 });
 
 async function getPrintQueue() {
@@ -12,7 +13,8 @@ async function getPrintQueue() {
     const response = await apiClient.get('/print-queue');
     return response.data;
   } catch (error) {
-    throw new Error(`Failed to fetch print queue: ${error.message}`);
+    const msg = error.response ? `HTTP ${error.response.status}` : error.message;
+    throw new Error(`Queue fetch failed (${msg})`);
   }
 }
 
@@ -30,10 +32,11 @@ async function downloadPdf(filename) {
     
     return new Promise((resolve, reject) => {
       writer.on('finish', () => resolve(filePath));
-      writer.on('error', (err) => reject(new Error(`Failed to write file ${filename}: ${err.message}`)));
+      writer.on('error', (err) => reject(new Error(`Failed writing temp file ${filename}: ${err.message}`)));
     });
   } catch (error) {
-    throw new Error(`Failed to download ${filename}: ${error.message}`);
+    const msg = error.response ? `HTTP ${error.response.status}` : error.message;
+    throw new Error(`Download failed for ${filename} (${msg})`);
   }
 }
 
@@ -41,7 +44,8 @@ async function updateJobStatus(jobId, status) {
   try {
     await apiClient.patch(`/jobs/${jobId}`, { status });
   } catch (error) {
-    throw new Error(`Failed to update job ${jobId} status to ${status}: ${error.message}`);
+    const msg = error.response ? `HTTP ${error.response.status}` : error.message;
+    throw new Error(`Status update failed for job ${jobId} -> ${status} (${msg})`);
   }
 }
 

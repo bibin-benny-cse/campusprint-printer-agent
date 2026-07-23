@@ -5,75 +5,108 @@ const config = require('./config');
 const fs = require('fs-extra');
 
 let isProcessing = false;
+let isOffline = false;
+let pollTimer = null;
 
 async function processQueue() {
   if (isProcessing) return;
   isProcessing = true;
 
+  let nextDelay = config.pollIntervalMs;
+
   try {
     const queue = await api.getPrintQueue();
     
+    // Connection succeeded! Reset offline state if coming back online
+    if (isOffline) {
+      isOffline = false;
+      logger.info(`[RECONNECT] Connection restored! Resuming print queue polling every ${config.pollIntervalMs}ms.`);
+    }
+
     if (!queue || queue.length === 0) {
       isProcessing = false;
+      scheduleNextPoll(nextDelay);
       return;
     }
 
-    // Process only one job at a time to prevent overlapping
+    // Process single job at a time to prevent conflicts
     const job = queue[0];
-    logger.info(`Job received: ID=${job.id}, file=${job.filename}`);
+    logger.info(`[JOB DETECTED] Processing Job ID=${job.id}, file="${job.filename}", copies=${job.copies}`);
     
     // 1. Update status to Printing
-    await api.updateJobStatus(job.id, 'Printing');
+    await api.updateJobStatus(job.id, 'Printing').catch(err => {
+      logger.warn(`Could not set status to Printing for job ${job.id}: ${err.message}`);
+    });
     
     let filePath = null;
     try {
-      // 2. Download file
+      // 2. Download document
       filePath = await api.downloadPdf(job.filename);
-      logger.info(`Download success: ${filePath}`);
+      logger.info(`[DOWNLOAD SUCCESS] Downloaded file to ${filePath}`);
 
-      // 3. Print
-      logger.info(`Printing started for Job ID=${job.id}`);
+      // 3. Send to printer
+      logger.info(`[PRINTING] Sending Job ID=${job.id} to printer "${config.printerName}"...`);
       await printer.printPdf(filePath, {
         copies: job.copies,
         mode: job.mode,
         sides: job.sides,
         pageRange: job.pageRange
       });
-      logger.info(`Printing completed for Job ID=${job.id}`);
+      logger.info(`[PRINT SUCCESS] Document printed successfully for Job ID=${job.id}`);
 
       // 4. Update status to Completed
-      await api.updateJobStatus(job.id, 'Completed');
+      await api.updateJobStatus(job.id, 'Completed').catch(err => {
+        logger.warn(`Could not set status to Completed for job ${job.id}: ${err.message}`);
+      });
 
     } catch (err) {
-      logger.error(`Error processing job ID=${job.id}`, err);
-      // Update status to Failed on error
+      logger.error(`[PRINT ERROR] Failed processing job ID=${job.id}`, err);
+      // Unblock queue by setting job to Failed
       await api.updateJobStatus(job.id, 'Failed').catch(e => {
-        logger.error(`Could not update job ${job.id} to Failed`, e);
+        logger.error(`Could not set status to Failed for job ${job.id}`, e);
       });
     } finally {
-      // 5. Cleanup temporary file
+      // 5. Always cleanup temp file
       if (filePath) {
         try {
           await fs.remove(filePath);
-          logger.info(`Temporary file deleted: ${filePath}`);
+          logger.info(`[CLEANUP] Deleted temporary file: ${filePath}`);
         } catch (err) {
-          logger.error(`Failed to delete temporary file ${filePath}`, err);
+          logger.error(`[CLEANUP ERROR] Failed deleting temp file ${filePath}`, err);
         }
       }
     }
   } catch (error) {
-    logger.error('Error polling queue (Network or Backend might be unreachable)', error.message);
+    if (!isOffline) {
+      isOffline = true;
+      logger.warn(`[NETWORK OFFLINE] Unable to reach backend server (${error.message}). Retrying in background...`);
+    }
+    // Smooth backoff delay during network outages (10 seconds)
+    nextDelay = 10000;
   } finally {
     isProcessing = false;
+    scheduleNextPoll(nextDelay);
   }
+}
+
+function scheduleNextPoll(delayMs) {
+  if (pollTimer) clearTimeout(pollTimer);
+  pollTimer = setTimeout(processQueue, delayMs);
 }
 
 function startPolling() {
   logger.info(`Starting queue polling every ${config.pollIntervalMs}ms...`);
-  setInterval(processQueue, config.pollIntervalMs);
-  processQueue(); // First run
+  processQueue(); // Immediate first run
+}
+
+function stopPolling() {
+  if (pollTimer) {
+    clearTimeout(pollTimer);
+    pollTimer = null;
+  }
 }
 
 module.exports = {
-  startPolling
+  startPolling,
+  stopPolling
 };
