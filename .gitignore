@@ -1,0 +1,14 @@
+# Dependencies
+node_modules/
+
+# Temporary downloaded print files
+temp/
+
+# Environment variables
+.env
+.env.local
+
+# Logs & System files
+*.log
+.DS_Store
+Thumbs.db

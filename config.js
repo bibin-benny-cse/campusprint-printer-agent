@@ -1,8 +1,8 @@
 const path = require('path');
 
 module.exports = {
-  // Uses the local backend by default, can be updated to the production Render URL later
-  apiUrl: process.env.API_URL || 'http://localhost:3001/api',
+  // Uses the live Render backend URL by default, can be overridden by API_URL env variable
+  apiUrl: process.env.API_URL || 'https://campusprint-backend-bl6p.onrender.com/api',
   // Default printer
   printerName: process.env.PRINTER_NAME || 'Microsoft Print to PDF',
   pollIntervalMs: 3000,

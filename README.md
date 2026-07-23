@@ -1,15 +1,15 @@
 # CampusPrint Printer Agent
 
-This is a standalone Node.js application that runs on your local computer to automatically fetch print jobs from your CampusPrint backend and send them directly to your local printer. 
+This is a standalone Node.js application that runs on your local computer at the shop to automatically fetch print jobs from your CampusPrint backend and send them directly to your physical printer. 
 
 It completely bypasses the browser print dialog to enable a fully automated print queue system.
 
 ## 🚀 Installation
 
-1. Make sure you have **Node.js** installed on your Windows machine.
+1. Make sure you have **Node.js** installed on your Windows machine ([Download Node.js](https://nodejs.org/)).
 2. Open a terminal or command prompt in this directory (`printer-agent`).
-3. (Optional if already installed) Run the following command to install dependencies:
-   ```bash
+3. Run the following command to install dependencies:
+   ```cmd
    npm install
    ```
 
@@ -19,31 +19,35 @@ Open the `config.js` file in any text editor. It contains the following properti
 
 ```javascript
 module.exports = {
-  apiUrl: process.env.API_URL || 'http://localhost:3001/api', // The backend API URL
-  printerName: process.env.PRINTER_NAME || 'Microsoft Print to PDF', // The name of your printer
-  pollIntervalMs: 3000, // How often to check for new jobs (in milliseconds)
-  tempDir: path.join(__dirname, 'temp'), // Folder where PDFs are temporarily downloaded
+  // Production Render Backend API URL (default)
+  apiUrl: process.env.API_URL || 'https://campusprint-backend-bl6p.onrender.com/api', 
+
+  // The name of your physical printer in Windows Settings
+  printerName: process.env.PRINTER_NAME || 'Microsoft Print to PDF', 
+
+  // How often to check for new jobs (in milliseconds)
+  pollIntervalMs: 3000, 
+
+  // Folder where files are temporarily downloaded
+  tempDir: path.join(__dirname, 'temp'), 
 };
 ```
 
-### Changing the Printer
+### Changing the Printer Name
 By default, this is set to use **Microsoft Print to PDF** for testing. 
 
-To change this to your **Canon printer** (or any other physical printer):
-1. Go to **Windows Settings > Bluetooth & devices > Printers & scanners**.
-2. Find the exact name of your Canon printer (e.g., `Canon LBP2900`).
-3. Copy that EXACT name and paste it into `config.js` under `printerName`.
+To connect your **shop printer** (e.g., Canon, Epson, HP):
+1. Open Windows Settings on your shop computer.
+2. Go to **Bluetooth & devices > Printers & scanners**.
+3. Find the exact name of your active printer (e.g., `Canon LBP2900`).
+4. Copy that EXACT name and update `printerName` in `config.js`.
 
-### Integrating with Production Backend
-Once you deploy the CampusPrint backend changes to your production Render server, update the `apiUrl` in `config.js`:
-```javascript
-apiUrl: 'https://campusprint-backend-kzte.onrender.com/api',
-```
+---
 
 ## ▶️ Running the Agent
 
 To start the automated printer agent, run:
-```bash
+```cmd
 npm start
 ```
 *Or run `node index.js`.*
@@ -51,8 +55,9 @@ npm start
 The application will begin polling your backend API every 3 seconds for new `ReadyToPrint` jobs. 
 
 **Workflow:**
-1. When you click **Print** on the Admin dashboard, the job goes into the `ReadyToPrint` status.
-2. The agent detects it, downloads the PDF file, and automatically prints it.
-3. The job status will update to `Completed` on the dashboard, and the temporary PDF is deleted locally.
+1. When a customer uploads a document, the job is saved as `Pending`.
+2. When you click **Print** on the Admin dashboard (`/admin`), the job status updates to `ReadyToPrint`.
+3. The printer agent detects the job, downloads the file, and automatically prints it on your physical printer.
+4. The job status automatically updates to `Completed` on the dashboard, and the local temporary file is cleaned up.
 
-If you ever need to stop the agent, simply press `Ctrl + C` in the terminal window.
+If you ever need to stop the agent, press `Ctrl + C` in the terminal window.
