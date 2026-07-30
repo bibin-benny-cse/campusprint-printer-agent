@@ -7,6 +7,15 @@ const fs = require('fs-extra');
 let isProcessing = false;
 let isOffline = false;
 let pollTimer = null;
+let heartbeatTimer = null;
+
+async function sendAgentHeartbeat(currentStatus = 'Idle', currentJobId = null) {
+  try {
+    await api.sendHeartbeat(config.printerName || 'Printer 1', currentStatus, currentJobId);
+  } catch (err) {
+    // Ignore heartbeat failures
+  }
+}
 
 async function processQueue() {
   if (isProcessing) return;
@@ -15,7 +24,10 @@ async function processQueue() {
   let nextDelay = config.pollIntervalMs;
 
   try {
-    const queue = await api.getPrintQueue();
+    // Send heartbeat
+    await sendAgentHeartbeat(isProcessing ? 'Printing' : 'Idle');
+
+    const queue = await api.getPrintQueue(config.printerName);
     
     // Connection succeeded! Reset offline state if coming back online
     if (isOffline) {
@@ -24,6 +36,7 @@ async function processQueue() {
     }
 
     if (!queue || queue.length === 0) {
+      await sendAgentHeartbeat('Idle');
       isProcessing = false;
       scheduleNextPoll(nextDelay);
       return;
@@ -37,6 +50,8 @@ async function processQueue() {
     await api.updateJobStatus(job.id, 'Printing').catch(err => {
       logger.warn(`Could not set status to Printing for job ${job.id}: ${err.message}`);
     });
+
+    await sendAgentHeartbeat('Printing', job.id);
     
     let filePath = null;
     try {
@@ -58,6 +73,7 @@ async function processQueue() {
       await api.updateJobStatus(job.id, 'Completed').catch(err => {
         logger.warn(`Could not set status to Completed for job ${job.id}: ${err.message}`);
       });
+      await sendAgentHeartbeat('Idle', null);
 
     } catch (err) {
       logger.error(`[PRINT ERROR] Failed processing job ID=${job.id}`, err);
@@ -65,6 +81,7 @@ async function processQueue() {
       await api.updateJobStatus(job.id, 'Failed').catch(e => {
         logger.error(`Could not set status to Failed for job ${job.id}`, e);
       });
+      await sendAgentHeartbeat('Error', null);
     } finally {
       // 5. Always cleanup temp file
       if (filePath) {
@@ -95,7 +112,9 @@ function scheduleNextPoll(delayMs) {
 }
 
 function startPolling() {
-  logger.info(`Starting queue polling every ${config.pollIntervalMs}ms...`);
+  logger.info(`Starting queue polling for "${config.printerName || 'Printer 1'}" every ${config.pollIntervalMs}ms...`);
+  sendAgentHeartbeat('Idle');
+  heartbeatTimer = setInterval(() => sendAgentHeartbeat(isProcessing ? 'Printing' : 'Idle'), 5000);
   processQueue(); // Immediate first run
 }
 
@@ -103,6 +122,10 @@ function stopPolling() {
   if (pollTimer) {
     clearTimeout(pollTimer);
     pollTimer = null;
+  }
+  if (heartbeatTimer) {
+    clearInterval(heartbeatTimer);
+    heartbeatTimer = null;
   }
 }
 

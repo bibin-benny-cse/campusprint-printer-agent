@@ -4,11 +4,17 @@ node_modules/
 # Temporary downloaded print files
 temp/
 
+# Logs
+logs/
+*.log
+
 # Environment variables
 .env
 .env.local
+.env.development
+.env.production
 
-# Logs & System files
-*.log
+# System files
 .DS_Store
 Thumbs.db
+ehthumbs.db

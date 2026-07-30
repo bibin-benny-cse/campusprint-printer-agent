@@ -1,14 +1,16 @@
-# CampusPrint Printer Agent (Windows Service Edition)
+# 🖨️ CampusPrint Printer Agent (Multi-Printer Service Edition)
 
-A high-reliability, lightweight Node.js daemon designed for continuous operation on college print-shop PCs. It automatically polls your CampusPrint backend for print queue items and sends them directly to your physical printer without browser intervention.
+A high-reliability, lightweight Node.js daemon designed for continuous operation on college print-shop PCs. It automatically polls your CampusPrint backend for assigned print queue items, sends periodic heartbeats, and routes documents directly to physical shop printers without manual browser intervention.
 
 ---
 
-## 🛡️ Enterprise Features
+## 🛡️ Key Features
 
+- **💓 Live Heartbeat Monitoring**: Transmits 5-second health heartbeats to backend so the Admin Dashboard knows when printers are Online, Idle, Printing, or Offline.
+- **🔀 Multi-Printer Queue Polling**: Supports polling for specific printers (`Printer 1`, `Printer 2`, `Printer 3`, `Printer 4`) or custom OS printer names.
 - **⚡ Native Windows Service**: Installs into Windows `services.msc` to start automatically on system boot before user login.
 - **🔒 Single-Instance Protection**: Prevents duplicate instances via localhost port locking (`port 39201`).
-- **🔄 Auto-Reconnection & Backoff**: Automatically handles network outages, Wi-Fi drops, or Render backend cold starts with smooth exponential backoff.
+- **🔄 Auto-Reconnection & Backoff**: Automatically handles network outages, Wi-Fi drops, or backend cold starts with smooth exponential backoff.
 - **📄 Resilient Error Recovery**: Unblocks print queue on job failures so subsequent documents print seamlessly.
 - **📝 Persistent File Logging**: Writes real-time diagnostic logs to `logs/agent.log`.
 
@@ -25,9 +27,10 @@ A high-reliability, lightweight Node.js daemon designed for continuous operation
 3. **Configure Printer & API** in `config.js`:
    ```javascript
    module.exports = {
-     apiUrl: process.env.API_URL || 'https://campusprint-backend-bl6p.onrender.com/api',
-     printerName: process.env.PRINTER_NAME || 'Your Shop Printer Name',
+     apiUrl: process.env.API_URL || 'http://localhost:3001/api',
+     printerName: process.env.PRINTER_NAME || 'Printer 1', // Exact printer name or OS driver name
      pollIntervalMs: 3000,
+     tempDir: path.join(__dirname, 'temp'),
    };
    ```
 

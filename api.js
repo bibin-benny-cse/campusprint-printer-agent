@@ -8,9 +8,18 @@ const apiClient = axios.create({
   timeout: 15000, // 15-second request timeout
 });
 
-async function getPrintQueue() {
+async function sendHeartbeat(printerName, status = 'Idle', currentJobId = null) {
   try {
-    const response = await apiClient.get('/print-queue');
+    await apiClient.post('/printers/heartbeat', { printerName, status, currentJobId });
+  } catch (error) {
+    // Heartbeat error ignored silently
+  }
+}
+
+async function getPrintQueue(printerName) {
+  try {
+    const params = printerName ? { printerName } : {};
+    const response = await apiClient.get('/print-queue', { params });
     return response.data;
   } catch (error) {
     const msg = error.response ? `HTTP ${error.response.status}` : error.message;
@@ -50,6 +59,7 @@ async function updateJobStatus(jobId, status) {
 }
 
 module.exports = {
+  sendHeartbeat,
   getPrintQueue,
   downloadPdf,
   updateJobStatus
