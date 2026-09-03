@@ -1,0 +1,42 @@
+[
+  {
+    "id": "1788235275324-477",
+    "backendId": 7,
+    "name": "Microsoft Print to PDF",
+    "systemName": "Microsoft Print to PDF",
+    "driverName": "Microsoft Print To PDF",
+    "status": "Idle",
+    "isOnline": true,
+    "isPaused": false,
+    "queueLength": 0,
+    "pagesPrintedToday": 9,
+    "jobsCompleted": 6,
+    "jobsFailed": 20,
+    "currentJob": null,
+    "health": {
+      "paperOut": false,
+      "hasError": false,
+      "lastError": "PDF printing failed: Command failed: D:\\UserData\\print\\printer-agent\\node_modules\\pdf-to-printer\\dist\\SumatraPDF-3.4.6-32.exe -print-to Microsoft Print to PDF -silent -print-settings fit,monochrome,1x D:\\UserData\\print\\printer-agent\\temp\\job-1788426451753-1788422105219-947382318.pdf\n"
+    }
+  },
+  {
+    "id": "1788235275324-508",
+    "backendId": 23,
+    "name": "Brother HL-B2000D series",
+    "systemName": "Brother HL-B2000D series",
+    "driverName": "Brother Laser Type1 Class Driver",
+    "status": "Offline",
+    "isOnline": false,
+    "isPaused": false,
+    "queueLength": 0,
+    "pagesPrintedToday": 0,
+    "jobsCompleted": 0,
+    "jobsFailed": 0,
+    "currentJob": null,
+    "health": {
+      "paperOut": false,
+      "hasError": false,
+      "lastError": null
+    }
+  }
+]

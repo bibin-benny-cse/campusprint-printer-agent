@@ -1,20 +1,19 @@
+# Sub-repositories with their own git tracking
+backend/
+frontend/
+
 # Dependencies
 node_modules/
 
-# Temporary downloaded print files
-temp/
-
-# Logs
+# Logs & temp
 logs/
 *.log
+temp/
 
 # Environment variables
 .env
 .env.local
-.env.development
-.env.production
 
 # System files
 .DS_Store
 Thumbs.db
-ehthumbs.db
