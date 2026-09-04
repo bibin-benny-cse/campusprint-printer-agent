@@ -1,3 +1,4 @@
+require('dotenv').config();
 const queue = require('./queue');
 const logger = require('./logger');
 const lock = require('./lock');
@@ -8,7 +9,7 @@ async function init() {
   // 1. Single-Instance Verification
   const locked = await lock.acquireLock();
   if (!locked) {
-    logger.warn('Shutting down duplicate process invocation.');
+    logger.warn('Single-instance lock check failed: Another Printer Agent process is already running on this machine (Port 39201). Shutting down duplicate invocation.');
     process.exit(0);
   }
 

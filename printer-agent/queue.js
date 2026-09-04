@@ -13,7 +13,7 @@ async function sendAgentHeartbeat(currentStatus = 'Idle', currentJobId = null) {
   try {
     await api.sendHeartbeat(config.printerName || 'Printer 1', currentStatus, currentJobId);
   } catch (err) {
-    // Ignore heartbeat failures
+    logger.warn(`[HEARTBEAT ERROR] ${err.message}`);
   }
 }
 

@@ -2,6 +2,7 @@ const axios = require('axios');
 const fs = require('fs-extra');
 const path = require('path');
 const config = require('./config');
+const logger = require('./logger');
 
 const apiClient = axios.create({
   baseURL: config.apiUrl,
@@ -12,7 +13,8 @@ async function sendHeartbeat(printerName, status = 'Idle', currentJobId = null) 
   try {
     await apiClient.post('/printers/heartbeat', { printerName, status, currentJobId });
   } catch (error) {
-    // Heartbeat error ignored silently
+    const msg = error.response ? `HTTP ${error.response.status}` : error.message;
+    logger.warn(`[HEARTBEAT FAILED] Could not send status ping for printer "${printerName}": ${msg}`);
   }
 }
 
