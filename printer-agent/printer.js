@@ -29,7 +29,7 @@ async function printPdf(filePath, jobOptions) {
     options.side = 'simplex';
   }
 
-  logger.info(`Print settings mapping - Copies: ${jobOptions.copies || 1}, Pages: ${jobOptions.pageRange || 'All'}, Mode: ${jobOptions.mode}, Sides: ${jobOptions.sides}, Printer Options: ${JSON.stringify(options)}`);
+  logger.info(`Print settings mapping - Copies: ${jobOptions.copies || 1}, Pages: ${jobOptions.pageRange || 'All'}, Mode: ${jobOptions.mode}, Sides: ${jobOptions.sides}, PagesPerSheet: ${jobOptions.pagesPerSheet || '1'}, Printer Options: ${JSON.stringify(options)}`);
   
   await ptp.print(filePath, options);
 }

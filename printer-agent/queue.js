@@ -65,7 +65,8 @@ async function processQueue() {
         copies: job.copies,
         mode: job.mode,
         sides: job.sides,
-        pageRange: job.pageRange
+        pageRange: job.pageRange,
+        pagesPerSheet: job.pagesPerSheet
       });
       logger.info(`[PRINT SUCCESS] Document printed successfully for Job ID=${job.id}`);
 
