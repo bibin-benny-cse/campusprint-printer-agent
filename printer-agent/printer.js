@@ -171,7 +171,12 @@ async function printPdf(filePath, jobOptions) {
     options.side = 'simplex';
   }
 
-  if (jobOptions.orientation && (jobOptions.orientation === 'portrait' || jobOptions.orientation === 'landscape')) {
+  const is2UpJob = String(jobOptions.pagesPerSheet) === '2' || jobOptions.pagesPerSheet === 2;
+  const layout = jobOptions.twoUpLayout === 'topBottom' ? 'topBottom' : 'sideBySide';
+
+  if (is2UpJob) {
+    options.orientation = layout === 'sideBySide' ? 'landscape' : 'portrait';
+  } else if (jobOptions.orientation && (jobOptions.orientation === 'portrait' || jobOptions.orientation === 'landscape')) {
     options.orientation = jobOptions.orientation;
   }
 
