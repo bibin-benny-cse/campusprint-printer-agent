@@ -64,9 +64,15 @@ async function processQueue() {
       await printer.printPdf(filePath, {
         copies: job.copies,
         mode: job.mode,
+        colorMode: job.colorMode || job.mode,
         sides: job.sides,
         pageRange: job.pageRange,
-        pagesPerSheet: job.pagesPerSheet
+        pagesPerSheet: job.pagesPerSheet,
+        twoUpLayout: job.twoUpLayout,
+        orientation: job.orientation,
+        pageOrder: job.pageOrder,
+        excludedPages: job.excludedPages,
+        pageRotations: job.pageRotations
       });
       logger.info(`[PRINT SUCCESS] Document printed successfully for Job ID=${job.id}`);
 
