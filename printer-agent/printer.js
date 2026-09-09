@@ -63,10 +63,40 @@ async function processPdfForPrinting(inputPath, jobOptions) {
 
   const outDoc = await PDFDocument.create();
 
+  let effectiveLayout = jobOptions.twoUpLayout;
+
   if (is2Up) {
-    logger.info(`[PRINTER AGENT] Applying 2-Up layout (${layout}) exactly ONCE for print execution...`);
+    // Detect page orientation of sample pages
+    const p1Idx = pageIndices[0] !== undefined ? pageIndices[0] : 0;
+    const [testEmb1] = await outDoc.embedPdf(srcDoc, [p1Idx]);
+    const testDims1 = testEmb1.scale(1);
+    const isLandscape1 = testDims1.width > testDims1.height;
+
+    let isLandscape2 = isLandscape1;
+    if (pageIndices.length > 1) {
+      const p2Idx = pageIndices[1];
+      const [testEmb2] = await outDoc.embedPdf(srcDoc, [p2Idx]);
+      const testDims2 = testEmb2.scale(1);
+      isLandscape2 = testDims2.width > testDims2.height;
+    }
+
+    // Auto-select optimal 2-Up layout if user/admin hasn't explicitly chosen topBottom or sideBySide manually
+    if (!effectiveLayout || effectiveLayout === 'auto' || (effectiveLayout !== 'topBottom' && effectiveLayout !== 'sideBySide')) {
+      if (isLandscape1 && isLandscape2) {
+        effectiveLayout = 'topBottom'; // Stack landscape slides top & bottom on portrait sheet
+      } else if (!isLandscape1 && !isLandscape2) {
+        effectiveLayout = 'sideBySide'; // Place portrait pages side-by-side on landscape sheet
+      } else {
+        const scaleA1 = Math.min(410 / testDims1.width, 580 / testDims1.height);
+        const scaleB1 = Math.min(580 / testDims1.width, 410 / testDims1.height);
+        effectiveLayout = scaleB1 > scaleA1 ? 'topBottom' : 'sideBySide';
+      }
+    }
+
+    logger.info(`[PRINTER AGENT] Applying 2-Up layout (${effectiveLayout}, isLandscape1=${isLandscape1}) for print execution...`);
+
     for (let i = 0; i < pageIndices.length; i += 2) {
-      const isSideBySide = layout === 'sideBySide';
+      const isSideBySide = effectiveLayout === 'sideBySide';
       const sheet = outDoc.addPage(isSideBySide ? [841.89, 595.28] : [595.28, 841.89]);
       const sheetW = sheet.getWidth();
       const sheetH = sheet.getHeight();
@@ -139,7 +169,7 @@ async function processPdfForPrinting(inputPath, jobOptions) {
   const tempPath = path.join(tempDir, `print_temp_${Date.now()}_${Math.round(Math.random() * 1000)}.pdf`);
   await fs.writeFile(tempPath, outBytes);
 
-  return { printPath: tempPath, isTemp: true };
+  return { printPath: tempPath, isTemp: true, effectiveLayout };
 }
 
 async function printPdf(filePath, jobOptions) {
@@ -171,17 +201,6 @@ async function printPdf(filePath, jobOptions) {
     options.side = 'simplex';
   }
 
-  const is2UpJob = String(jobOptions.pagesPerSheet) === '2' || jobOptions.pagesPerSheet === 2;
-  const layout = jobOptions.twoUpLayout === 'topBottom' ? 'topBottom' : 'sideBySide';
-
-  if (is2UpJob) {
-    options.orientation = layout === 'sideBySide' ? 'landscape' : 'portrait';
-  } else if (jobOptions.orientation && (jobOptions.orientation === 'portrait' || jobOptions.orientation === 'landscape')) {
-    options.orientation = jobOptions.orientation;
-  }
-
-  logger.info(`Print settings mapping - Copies: ${jobOptions.copies || 1}, Pages: ${jobOptions.pageRange || 'All'}, Mode: ${jobOptions.mode}, Sides: ${jobOptions.sides}, PagesPerSheet: ${jobOptions.pagesPerSheet || '1'}, twoUpLayout: ${jobOptions.twoUpLayout || 'sideBySide'}, Printer Options: ${JSON.stringify(options)}`);
-
   let printPath = filePath;
   let isTemp = false;
 
@@ -189,6 +208,16 @@ async function printPdf(filePath, jobOptions) {
     const processed = await processPdfForPrinting(filePath, jobOptions);
     printPath = processed.printPath;
     isTemp = processed.isTemp;
+
+    const is2UpJob = String(jobOptions.pagesPerSheet) === '2' || jobOptions.pagesPerSheet === 2;
+    if (is2UpJob) {
+      const layout = processed.effectiveLayout || jobOptions.twoUpLayout;
+      options.orientation = layout === 'sideBySide' ? 'landscape' : 'portrait';
+    } else if (jobOptions.orientation && (jobOptions.orientation === 'portrait' || jobOptions.orientation === 'landscape')) {
+      options.orientation = jobOptions.orientation;
+    }
+
+    logger.info(`Print settings mapping - Copies: ${jobOptions.copies || 1}, Pages: ${jobOptions.pageRange || 'All'}, Mode: ${jobOptions.mode}, Sides: ${jobOptions.sides}, PagesPerSheet: ${jobOptions.pagesPerSheet || '1'}, effectiveLayout: ${processed.effectiveLayout || jobOptions.twoUpLayout || 'auto'}, Printer Options: ${JSON.stringify(options)}`);
 
     await ptp.print(printPath, options);
   } finally {
