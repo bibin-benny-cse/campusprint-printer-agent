@@ -8,6 +8,9 @@ if %errorLevel% neq 0 (
     exit /b 1
 )
 
+:: Ensure current working directory is the script directory
+cd /d "%~dp0"
+
 echo ===============================================================
 echo    Uninstalling CampusPrint Printer Agent Windows Service
 echo ===============================================================
@@ -15,3 +18,4 @@ echo.
 node uninstall-service.js
 echo.
 pause
+

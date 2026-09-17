@@ -1,8 +1,10 @@
 @echo off
+cd /d "%~dp0"
 echo =========================================================
 echo    CampusPrint Printer Agent - Windows Auto-Start Setup
 echo =========================================================
 echo.
+
 
 set STARTUP_DIR=%APPDATA%\Microsoft\Windows\Start Menu\Programs\Startup
 set SCRIPT_DIR=%~dp0
