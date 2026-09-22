@@ -9,37 +9,54 @@ const ptp = require('pdf-to-printer');
 async function resolvePrinterName() {
   const target = config.printerName;
 
-  // 1. If an explicit printer name is specified and is not "auto", use it
+  // 1. If explicit printer name is specified and is NOT "auto", use it directly
   if (target && target.trim().toLowerCase() !== 'auto') {
     logger.info(`[CONFIG] Using explicit printer name: "${target.trim()}"`);
     return target.trim();
   }
 
-  // 2. Auto-detect Windows Default Printer
+  // Common virtual printer names to filter out when looking for physical hardware
+  const virtualKeywords = ['microsoft print to pdf', 'onenote', 'fax', 'xps document writer', 'adobe pdf'];
+  const isVirtual = (name) => name && virtualKeywords.some(k => name.toLowerCase().includes(k));
+
   try {
-    const defaultPrinter = await ptp.getDefaultPrinter();
-    if (defaultPrinter && defaultPrinter.name) {
-      logger.info(`[AUTO-DETECT] Identified default Windows printer: "${defaultPrinter.name}"`);
-      return defaultPrinter.name;
+    const allPrinters = await ptp.getPrinters();
+    const printerNames = (allPrinters || []).map(p => p.name).filter(Boolean);
+    
+    logger.info(`[PRINTER SCAN] Installed printers found in Windows Settings: ${JSON.stringify(printerNames)}`);
+
+    const physicalPrinters = printerNames.filter(name => !isVirtual(name));
+
+    // 2. Check default printer first
+    const defaultPrinterObj = await ptp.getDefaultPrinter();
+    const defaultName = defaultPrinterObj ? defaultPrinterObj.name : null;
+
+    if (defaultName) {
+      if (!isVirtual(defaultName)) {
+        logger.info(`[AUTO-DETECT] Auto-selected default physical Windows printer: "${defaultName}"`);
+        return defaultName;
+      }
+      logger.info(`[AUTO-DETECT] Default printer is virtual ("${defaultName}"). Searching for connected physical printers...`);
+    }
+
+    // 3. If default printer was virtual, but physical printers exist, auto-select the physical printer!
+    if (physicalPrinters.length > 0) {
+      logger.info(`[AUTO-DETECT] Auto-selected physical printer: "${physicalPrinters[0]}"`);
+      return physicalPrinters[0];
+    }
+
+    // 4. Fallback to default printer if no physical printer found
+    if (defaultName) {
+      logger.info(`[AUTO-DETECT] Using default printer: "${defaultName}"`);
+      return defaultName;
     }
   } catch (err) {
-    logger.warn(`[AUTO-DETECT] Could not query Windows default printer: ${err.message}`);
+    logger.warn(`[AUTO-DETECT ERROR] Could not query Windows printers: ${err.message}`);
   }
 
-  // 3. Fallback: select first available installed printer
-  try {
-    const printers = await ptp.getPrinters();
-    if (printers && printers.length > 0) {
-      logger.info(`[AUTO-DETECT] Selected first available printer from list: "${printers[0].name}"`);
-      return printers[0].name;
-    }
-  } catch (err) {
-    logger.warn(`[AUTO-DETECT] Could not list installed printers: ${err.message}`);
-  }
-
-  // 4. Final fallback
+  // 5. Final fallback
   const fallback = 'Microsoft Print to PDF';
-  logger.warn(`[AUTO-DETECT] Fallback printer selected: "${fallback}"`);
+  logger.warn(`[AUTO-DETECT FALLBACK] Defaulting to: "${fallback}"`);
   return fallback;
 }
 
