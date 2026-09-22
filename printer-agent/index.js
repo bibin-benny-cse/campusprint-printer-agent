@@ -4,6 +4,44 @@ const logger = require('./logger');
 const lock = require('./lock');
 const fs = require('fs-extra');
 const config = require('./config');
+const ptp = require('pdf-to-printer');
+
+async function resolvePrinterName() {
+  const target = config.printerName;
+
+  // 1. If an explicit printer name is specified and is not "auto", use it
+  if (target && target.trim().toLowerCase() !== 'auto') {
+    logger.info(`[CONFIG] Using explicit printer name: "${target.trim()}"`);
+    return target.trim();
+  }
+
+  // 2. Auto-detect Windows Default Printer
+  try {
+    const defaultPrinter = await ptp.getDefaultPrinter();
+    if (defaultPrinter && defaultPrinter.name) {
+      logger.info(`[AUTO-DETECT] Identified default Windows printer: "${defaultPrinter.name}"`);
+      return defaultPrinter.name;
+    }
+  } catch (err) {
+    logger.warn(`[AUTO-DETECT] Could not query Windows default printer: ${err.message}`);
+  }
+
+  // 3. Fallback: select first available installed printer
+  try {
+    const printers = await ptp.getPrinters();
+    if (printers && printers.length > 0) {
+      logger.info(`[AUTO-DETECT] Selected first available printer from list: "${printers[0].name}"`);
+      return printers[0].name;
+    }
+  } catch (err) {
+    logger.warn(`[AUTO-DETECT] Could not list installed printers: ${err.message}`);
+  }
+
+  // 4. Final fallback
+  const fallback = 'Microsoft Print to PDF';
+  logger.warn(`[AUTO-DETECT] Fallback printer selected: "${fallback}"`);
+  return fallback;
+}
 
 async function init() {
   // 1. Single-Instance Verification
@@ -14,10 +52,13 @@ async function init() {
   }
 
   try {
+    // Resolve target printer dynamically (Explicit or Auto-Detect)
+    config.printerName = await resolvePrinterName();
+
     logger.info('===================================================');
     logger.info('--- CampusPrint Printer Agent Service Starting ---');
     logger.info(`Backend API URL : ${config.apiUrl}`);
-    logger.info(`Physical Printer: ${config.printerName}`);
+    logger.info(`Active Printer  : ${config.printerName}`);
     logger.info('===================================================');
     
     // Ensure temporary directory exists
