@@ -28,7 +28,28 @@ jobs:
 
       - name: Build & Publish Self-Contained win-x64
         run: |
-          dotnet publish XeroxGo.PrinterAgent/XeroxGo.PrinterAgent.csproj -c Release -r win-x64 --self-contained -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true
+          dotnet publish XeroxGo.PrinterAgent/XeroxGo.PrinterAgent.csproj -c Release -r win-x64 --self-contained -p:PublishSingleFile=true
+
+      - name: Generate Code Signing Certificate & Sign Standalone EXE
+        shell: pwsh
+        run: |
+          # 1. Generate Authenticode Code Signing Certificate for XeroxGo Technologies
+          $cert = New-SelfSignedCertificate -Type CodeSigningCert -Subject "CN=XeroxGo Technologies, O=XeroxGo Technologies, C=US" -KeyUsage DigitalSignature -FriendlyName "XeroxGo Publisher Certificate" -CertStoreLocation "Cert:\CurrentUser\My" -NotAfter (Get-Date).AddYears(5)
+          $password = ConvertTo-SecureString -String "XeroxGo2026!" -Force -AsPlainText
+          
+          # 2. Export PFX and public CER
+          New-Item -ItemType Directory -Force -Path "certs"
+          Export-PfxCertificate -Cert $cert -FilePath "certs\XeroxGoCert.pfx" -Password $password
+          Export-Certificate -Cert $cert -FilePath "certs\XeroxGo-Publisher-Certificate.cer"
+          
+          # 3. Locate Microsoft SignTool from Windows SDK
+          $signtool = (Get-ChildItem -Path "C:\Program Files (x86)\Windows Kits\10\bin" -Filter "signtool.exe" -Recurse | Select-Object -First 1).FullName
+          Write-Host "Located SignTool at: $signtool"
+          
+          # 4. Sign standalone executable with RFC 3161 timestamp
+          $exePath = "XeroxGo.PrinterAgent/bin/Release/net8.0-windows/win-x64/publish/XeroxGo.PrinterAgent.exe"
+          & $signtool sign /f "certs\XeroxGoCert.pfx" /p "XeroxGo2026!" /fd SHA256 /tr http://timestamp.digicert.com /td SHA256 $exePath
+          Write-Host "Successfully signed $exePath"
 
       - name: Upload Standalone .EXE Artifact
         uses: actions/upload-artifact@v4
@@ -41,11 +62,22 @@ jobs:
           choco install innosetup --no-progress
           & "C:\Program Files (x86)\Inno Setup 6\ISCC.exe" XeroxGo.PrinterAgent/Installer/setup.iss
 
+      - name: Sign Inno Setup Installer & Stage Certificate
+        shell: pwsh
+        run: |
+          $signtool = (Get-ChildItem -Path "C:\Program Files (x86)\Windows Kits\10\bin" -Filter "signtool.exe" -Recurse | Select-Object -First 1).FullName
+          $setupPath = "XeroxGo.PrinterAgent/Installer/Output/XeroxGoAgent-Setup.exe"
+          & $signtool sign /f "certs\XeroxGoCert.pfx" /p "XeroxGo2026!" /fd SHA256 /tr http://timestamp.digicert.com /td SHA256 $setupPath
+          Write-Host "Successfully signed $setupPath"
+          Copy-Item "certs\XeroxGo-Publisher-Certificate.cer" "XeroxGo.PrinterAgent/Installer/Output/XeroxGo-Publisher-Certificate.cer"
+
       - name: Upload Setup Installer Artifact
         uses: actions/upload-artifact@v4
         with:
           name: XeroxGoAgent-Setup-Installer
-          path: XeroxGo.PrinterAgent/Installer/Output/XeroxGoAgent-Setup.exe
+          path: |
+            XeroxGo.PrinterAgent/Installer/Output/XeroxGoAgent-Setup.exe
+            XeroxGo.PrinterAgent/Installer/Output/XeroxGo-Publisher-Certificate.cer
 
       - name: Publish GitHub Release (on tags)
         if: startsWith(github.ref, 'refs/tags/v')
@@ -54,6 +86,8 @@ jobs:
           files: |
             XeroxGo.PrinterAgent/bin/Release/net8.0-windows/win-x64/publish/XeroxGo.PrinterAgent.exe
             XeroxGo.PrinterAgent/Installer/Output/XeroxGoAgent-Setup.exe
+            certs/XeroxGo-Publisher-Certificate.cer
+            XeroxGo.PrinterAgent/Installer/Trust-Publisher.bat
           draft: false
           prerelease: false
           generate_release_notes: true
