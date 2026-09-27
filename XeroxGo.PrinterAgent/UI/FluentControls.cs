@@ -393,10 +393,10 @@ namespace XeroxGo.PrinterAgent.UI
 
         public TextBox TextBox => _innerTextBox;
 
-        public override string Text
+        public override string? Text
         {
             get => _innerTextBox.Text;
-            set => _innerTextBox.Text = value;
+            set => _innerTextBox.Text = value ?? string.Empty;
         }
 
         public bool IsPassword
