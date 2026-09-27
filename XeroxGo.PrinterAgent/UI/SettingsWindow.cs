@@ -54,7 +54,7 @@ namespace XeroxGo.PrinterAgent.UI
 
             Text = string.Empty;
             ShowIcon = false;
-            ClientSize = new Size(560, 668);
+            ClientSize = new Size(560, 638);
             FormBorderStyle = FormBorderStyle.FixedDialog;
             MaximizeBox = false;
             MinimizeBox = false;
@@ -70,7 +70,7 @@ namespace XeroxGo.PrinterAgent.UI
 
             int marginX = 24;
             int contentWidth = ClientSize.Width - (marginX * 2);
-            int currentY = 18;
+            int currentY = 2;
 
             // ==========================================
             // 1. Header (Logo + Title + Status Pill)
@@ -78,14 +78,14 @@ namespace XeroxGo.PrinterAgent.UI
             _headerPanel = new Panel
             {
                 Location = new Point(marginX, currentY),
-                Size = new Size(contentWidth, 54),
+                Size = new Size(contentWidth, 36),
                 BackColor = FluentTheme.Background
             };
 
             // Official XeroxGo Logo (Transparent Emblem)
             var logoBox = new PictureBox
             {
-                Location = new Point(0, 11),
+                Location = new Point(0, 2),
                 Size = new Size(63, 32),
                 BackColor = Color.Transparent
             };
@@ -115,7 +115,7 @@ namespace XeroxGo.PrinterAgent.UI
                 Text = "XeroxGo Agent",
                 Font = FluentTheme.Font(14f, FontStyle.Bold),
                 ForeColor = FluentTheme.TextPrimary,
-                Location = new Point(74, 15),
+                Location = new Point(74, 6),
                 AutoSize = true
             };
             _headerPanel.Controls.Add(lblTitle);
@@ -123,11 +123,11 @@ namespace XeroxGo.PrinterAgent.UI
             // Status Badge (Top Right)
             _statusBadge = new FluentStatusBadge();
             _statusBadge.SetStatus(currentStatus, statusState);
-            _statusBadge.Location = new Point(contentWidth - _statusBadge.Width, 13);
+            _statusBadge.Location = new Point(contentWidth - _statusBadge.Width, 4);
             _headerPanel.Controls.Add(_statusBadge);
 
             Controls.Add(_headerPanel);
-            currentY += 62;
+            currentY += 48;
 
             // ==========================================
             // 2. Card 1: Cloud Backend
