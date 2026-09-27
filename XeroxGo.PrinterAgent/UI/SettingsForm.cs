@@ -1,5 +1,6 @@
 using System;
 using System.Drawing;
+using System.Drawing.Drawing2D;
 using System.Windows.Forms;
 using XeroxGo.PrinterAgent.Models;
 using XeroxGo.PrinterAgent.Services;
@@ -10,124 +11,218 @@ namespace XeroxGo.PrinterAgent.UI
     {
         private readonly AppConfig _config;
         private readonly Action<AppConfig> _onSaveCallback;
+        private readonly string _initialStatus;
 
-        private TextBox _txtApiUrl = null!;
-        private TextBox _txtApiKey = null!;
+        private FluentTextBox _txtApiUrl = null!;
+        private FluentTextBox _txtApiKey = null!;
         private ComboBox _cmbLogicalSlot = null!;
         private ComboBox _cmbPhysicalPrinters = null!;
         private NumericUpDown _numPollInterval = null!;
-        private CheckBox _chkAutoStart = null!;
-        private Button _btnSave = null!;
-        private Button _btnCancel = null!;
-        private Button _btnTestPrint = null!;
-        private Button _btnRefreshPrinters = null!;
+        private FluentToggleSwitch _toggleAutoStart = null!;
+        private Label _lblAutoStartStatus = null!;
+        private FluentButton _btnSave = null!;
+        private FluentButton _btnCancel = null!;
+        private FluentButton _btnTestPrint = null!;
+        private FluentButton _btnRefreshPrinters = null!;
+        private FluentButton _btnViewLogs = null!;
+        private FluentStatusBadge _statusBadge = null!;
 
-        public SettingsForm(AppConfig config, Action<AppConfig> onSaveCallback)
+        public SettingsForm(AppConfig config, Action<AppConfig> onSaveCallback, string currentStatus = "Connected to Cloud", string statusState = "idle")
         {
             _config = config;
             _onSaveCallback = onSaveCallback;
+            _initialStatus = currentStatus;
 
-            InitializeComponents();
+            InitializeComponents(currentStatus, statusState);
             LoadValues();
         }
 
-        private void InitializeComponents()
+        protected override void OnHandleCreated(EventArgs e)
+        {
+            base.OnHandleCreated(e);
+            DwmApi.ApplyWindows11Styling(this);
+        }
+
+        private void InitializeComponents(string currentStatus, string statusState)
         {
             Text = "XeroxGo — Printer Agent Settings";
-            Size = new Size(540, 560);
-            FormBorderStyle = FormBorderStyle.FixedDialog;
+            ClientSize = new Size(580, 680);
+            FormBorderStyle = FormBorderStyle.FixedSingle;
             MaximizeBox = false;
-            MinimizeBox = false;
+            MinimizeBox = true;
             StartPosition = FormStartPosition.CenterScreen;
-            Font = new Font("Segoe UI", 9.5f, FontStyle.Regular);
-            BackColor = Color.FromArgb(248, 250, 252);
+            BackColor = FluentTheme.Background;
+            Font = FluentTheme.Font(9.5f);
 
-            var mainPanel = new Panel
+            var rootPanel = new Panel
             {
                 Dock = DockStyle.Fill,
-                Padding = new Padding(24)
+                Padding = new Padding(24, 20, 24, 20),
+                AutoScroll = true
             };
-            Controls.Add(mainPanel);
+            Controls.Add(rootPanel);
 
-            // Title Header
+            // ==========================================
+            // 1. Header (Icon + App Title + Status Pill)
+            // ==========================================
+            var headerPanel = new Panel
+            {
+                Location = new Point(24, 16),
+                Size = new Size(532, 54),
+                BackColor = Color.Transparent
+            };
+            rootPanel.Controls.Add(headerPanel);
+
+            // Brand glyph
+            var picLogo = new PictureBox
+            {
+                Size = new Size(36, 36),
+                Location = new Point(0, 4),
+                BackColor = Color.Transparent
+            };
+            picLogo.Paint += (s, e) =>
+            {
+                e.Graphics.SmoothingMode = SmoothingMode.AntiAlias;
+                var rect = new Rectangle(0, 0, 35, 35);
+                using var path = FluentTheme.CreateRoundedPath(rect, 8);
+                using var brush = new SolidBrush(FluentTheme.Accent);
+                e.Graphics.FillPath(brush, path);
+
+                // Modern print glyph
+                using var pen = new Pen(Color.White, 2f);
+                e.Graphics.DrawRectangle(pen, 9, 13, 17, 13);
+                e.Graphics.DrawLine(pen, 12, 9, 23, 9);
+                e.Graphics.DrawLine(pen, 12, 9, 12, 13);
+                e.Graphics.DrawLine(pen, 23, 9, 23, 13);
+                e.Graphics.FillRectangle(Brushes.White, 13, 20, 9, 2);
+            };
+            headerPanel.Controls.Add(picLogo);
+
             var lblTitle = new Label
             {
-                Text = "🖨️ XeroxGo Printer Agent Setup",
-                Font = new Font("Segoe UI", 13f, FontStyle.Bold),
-                ForeColor = Color.FromArgb(15, 23, 42),
-                AutoSize = true,
-                Location = new Point(24, 18)
+                Text = "XeroxGo Printer Agent",
+                Font = FluentTheme.Font(13f, FontStyle.Bold),
+                ForeColor = FluentTheme.TextPrimary,
+                Location = new Point(46, 2),
+                AutoSize = true
             };
-            mainPanel.Controls.Add(lblTitle);
+            headerPanel.Controls.Add(lblTitle);
 
             var lblSubtitle = new Label
             {
-                Text = "Configure your cloud backend pairing and physical printer driver.",
-                ForeColor = Color.FromArgb(100, 116, 139),
-                AutoSize = true,
-                Location = new Point(25, 46)
+                Text = "Print shop counter pairing & hardware daemon",
+                Font = FluentTheme.Font(8.5f),
+                ForeColor = FluentTheme.TextSecondary,
+                Location = new Point(48, 26),
+                AutoSize = true
             };
-            mainPanel.Controls.Add(lblSubtitle);
+            headerPanel.Controls.Add(lblSubtitle);
+
+            _statusBadge = new FluentStatusBadge
+            {
+                Location = new Point(362, 8),
+                Size = new Size(170, 28)
+            };
+            _statusBadge.SetStatus(_initialStatus, statusState);
+            headerPanel.Controls.Add(_statusBadge);
 
             int currentY = 80;
 
-            // 1. API URL
-            var lblApi = new Label
+            // ==========================================
+            // 2. Card: Cloud Backend
+            // ==========================================
+            var cardCloud = new FluentCard
             {
-                Text = "Backend API URL:",
-                Font = new Font("Segoe UI", 9f, FontStyle.Bold),
-                Location = new Point(25, currentY),
+                Location = new Point(24, currentY),
+                Size = new Size(532, 160)
+            };
+            rootPanel.Controls.Add(cardCloud);
+
+            var lblCloudTitle = new Label
+            {
+                Text = "☁️  Cloud Backend Connection",
+                Font = FluentTheme.Font(10f, FontStyle.Bold),
+                ForeColor = FluentTheme.TextPrimary,
+                Location = new Point(16, 14),
                 AutoSize = true
             };
-            mainPanel.Controls.Add(lblApi);
-            currentY += 22;
+            cardCloud.Controls.Add(lblCloudTitle);
 
-            _txtApiUrl = new TextBox
+            // Server URL
+            var lblUrl = new Label
             {
-                Location = new Point(25, currentY),
-                Width = 470,
-                Font = new Font("Segoe UI", 9.5f)
+                Text = "Server API Endpoint:",
+                Font = FluentTheme.Font(8.5f, FontStyle.Bold),
+                ForeColor = FluentTheme.TextSecondary,
+                Location = new Point(16, 42),
+                AutoSize = true
             };
-            mainPanel.Controls.Add(_txtApiUrl);
-            currentY += 36;
+            cardCloud.Controls.Add(lblUrl);
 
-            // 2. Agent API Key (Bearer Auth)
+            _txtApiUrl = new FluentTextBox
+            {
+                Location = new Point(16, 62),
+                Size = new Size(500, 36)
+            };
+            cardCloud.Controls.Add(_txtApiUrl);
+
+            // API Key
             var lblKey = new Label
             {
-                Text = "Agent Security Key (Optional / Bearer Token):",
-                Font = new Font("Segoe UI", 9f, FontStyle.Bold),
-                Location = new Point(25, currentY),
+                Text = "Shop Agent API Key:",
+                Font = FluentTheme.Font(8.5f, FontStyle.Bold),
+                ForeColor = FluentTheme.TextSecondary,
+                Location = new Point(16, 104),
                 AutoSize = true
             };
-            mainPanel.Controls.Add(lblKey);
-            currentY += 22;
+            cardCloud.Controls.Add(lblKey);
 
-            _txtApiKey = new TextBox
+            _txtApiKey = new FluentTextBox(allowPasswordToggle: true)
             {
-                Location = new Point(25, currentY),
-                Width = 470,
-                Font = new Font("Segoe UI", 9.5f),
-                UseSystemPasswordChar = true
+                Location = new Point(16, 122),
+                Size = new Size(500, 36)
             };
-            mainPanel.Controls.Add(_txtApiKey);
-            currentY += 38;
+            cardCloud.Controls.Add(_txtApiKey);
 
-            // 3. Logical Printer Slot (in XeroxGo)
-            var lblLogical = new Label
+            currentY += 172;
+
+            // ==========================================
+            // 3. Card: Physical Hardware
+            // ==========================================
+            var cardHardware = new FluentCard
+            {
+                Location = new Point(24, currentY),
+                Size = new Size(532, 196)
+            };
+            rootPanel.Controls.Add(cardHardware);
+
+            var lblHardwareTitle = new Label
+            {
+                Text = "🖨️  Physical Hardware & Counter Mapping",
+                Font = FluentTheme.Font(10f, FontStyle.Bold),
+                ForeColor = FluentTheme.TextPrimary,
+                Location = new Point(16, 14),
+                AutoSize = true
+            };
+            cardHardware.Controls.Add(lblHardwareTitle);
+
+            // Dashboard slot
+            var lblSlot = new Label
             {
                 Text = "Logical Slot in XeroxGo Dashboard:",
-                Font = new Font("Segoe UI", 9f, FontStyle.Bold),
-                Location = new Point(25, currentY),
+                Font = FluentTheme.Font(8.5f, FontStyle.Bold),
+                ForeColor = FluentTheme.TextSecondary,
+                Location = new Point(16, 42),
                 AutoSize = true
             };
-            mainPanel.Controls.Add(lblLogical);
-            currentY += 22;
+            cardHardware.Controls.Add(lblSlot);
 
             _cmbLogicalSlot = new ComboBox
             {
-                Location = new Point(25, currentY),
-                Width = 470,
-                Font = new Font("Segoe UI", 9.5f)
+                Location = new Point(16, 62),
+                Size = new Size(500, 32),
+                Font = FluentTheme.Font(9.5f),
+                DropDownStyle = ComboBoxStyle.DropDown
             };
             _cmbLogicalSlot.Items.AddRange(new object[] {
                 "Printer 1",
@@ -137,113 +232,182 @@ namespace XeroxGo.PrinterAgent.UI
                 "Main B&W Counter",
                 "Color Printer Counter"
             });
-            mainPanel.Controls.Add(_cmbLogicalSlot);
-            currentY += 38;
+            cardHardware.Controls.Add(_cmbLogicalSlot);
 
-            // 4. Physical Windows Driver
+            // Physical Windows Driver
             var lblPhysical = new Label
             {
                 Text = "Local Physical Windows Printer:",
-                Font = new Font("Segoe UI", 9f, FontStyle.Bold),
-                Location = new Point(25, currentY),
+                Font = FluentTheme.Font(8.5f, FontStyle.Bold),
+                ForeColor = FluentTheme.TextSecondary,
+                Location = new Point(16, 102),
                 AutoSize = true
             };
-            mainPanel.Controls.Add(lblPhysical);
-            currentY += 22;
+            cardHardware.Controls.Add(lblPhysical);
 
             _cmbPhysicalPrinters = new ComboBox
             {
-                Location = new Point(25, currentY),
-                Width = 350,
+                Location = new Point(16, 122),
+                Size = new Size(385, 32),
                 DropDownStyle = ComboBoxStyle.DropDownList,
-                Font = new Font("Segoe UI", 9.5f)
+                Font = FluentTheme.Font(9.5f)
             };
-            mainPanel.Controls.Add(_cmbPhysicalPrinters);
+            cardHardware.Controls.Add(_cmbPhysicalPrinters);
 
-            _btnRefreshPrinters = new Button
+            _btnRefreshPrinters = new FluentButton
             {
                 Text = "🔄 Refresh",
-                Location = new Point(385, currentY - 1),
-                Width = 110,
-                Height = 29,
-                BackColor = Color.FromArgb(241, 245, 249),
-                FlatStyle = FlatStyle.Flat
+                Location = new Point(410, 120),
+                Size = new Size(106, 32),
+                Font = FluentTheme.Font(8.5f)
             };
             _btnRefreshPrinters.Click += (s, e) => PopulatePhysicalPrinters();
-            mainPanel.Controls.Add(_btnRefreshPrinters);
-            currentY += 40;
+            cardHardware.Controls.Add(_btnRefreshPrinters);
 
-            // 5. Polling Interval
-            var lblPoll = new Label
+            _btnTestPrint = new FluentButton
             {
-                Text = "Queue Poll Interval (seconds):",
-                Location = new Point(25, currentY + 3),
+                Text = "🖨️ Send Diagnostic Test Slip",
+                Location = new Point(16, 160),
+                Size = new Size(210, 30),
+                Font = FluentTheme.Font(8.5f)
+            };
+            _btnTestPrint.Click += OnTestPrintClicked;
+            cardHardware.Controls.Add(_btnTestPrint);
+
+            currentY += 208;
+
+            // ==========================================
+            // 4. Card: Automation & Startup
+            // ==========================================
+            var cardAutomation = new FluentCard
+            {
+                Location = new Point(24, currentY),
+                Size = new Size(532, 116)
+            };
+            rootPanel.Controls.Add(cardAutomation);
+
+            var lblAutoTitle = new Label
+            {
+                Text = "⚡  Automation & Dispatch",
+                Font = FluentTheme.Font(10f, FontStyle.Bold),
+                ForeColor = FluentTheme.TextPrimary,
+                Location = new Point(16, 12),
                 AutoSize = true
             };
-            mainPanel.Controls.Add(lblPoll);
+            cardAutomation.Controls.Add(lblAutoTitle);
+
+            // Polling
+            var lblPoll = new Label
+            {
+                Text = "Queue Polling Interval (seconds):",
+                Font = FluentTheme.Font(8.5f),
+                ForeColor = FluentTheme.TextSecondary,
+                Location = new Point(16, 42),
+                AutoSize = true
+            };
+            cardAutomation.Controls.Add(lblPoll);
 
             _numPollInterval = new NumericUpDown
             {
-                Location = new Point(240, currentY),
-                Width = 80,
+                Location = new Point(220, 39),
+                Size = new Size(60, 26),
+                Font = FluentTheme.Font(9.5f),
                 Minimum = 1,
                 Maximum = 60,
                 Value = 3
             };
-            mainPanel.Controls.Add(_numPollInterval);
-            currentY += 36;
+            cardAutomation.Controls.Add(_numPollInterval);
 
-            // 6. Windows Startup Checkbox
-            _chkAutoStart = new CheckBox
+            // Toggle switch for Windows startup
+            var lblStartup = new Label
             {
-                Text = "Start automatically when Windows boots up",
-                Location = new Point(25, currentY),
+                Text = "Launch automatically on Windows startup",
+                Font = FluentTheme.Font(9f),
+                ForeColor = FluentTheme.TextPrimary,
+                Location = new Point(16, 78),
                 AutoSize = true
             };
-            mainPanel.Controls.Add(_chkAutoStart);
-            currentY += 40;
+            cardAutomation.Controls.Add(lblStartup);
 
-            // 7. Test Print Button
-            _btnTestPrint = new Button
+            _toggleAutoStart = new FluentToggleSwitch
             {
-                Text = "🖨️ Send Hardware Test Slip",
-                Location = new Point(25, currentY),
-                Width = 220,
-                Height = 34,
-                BackColor = Color.FromArgb(241, 245, 249),
-                FlatStyle = FlatStyle.Flat
+                Location = new Point(440, 76),
+                Size = new Size(42, 22)
             };
-            _btnTestPrint.Click += OnTestPrintClicked;
-            mainPanel.Controls.Add(_btnTestPrint);
-            currentY += 48;
+            cardAutomation.Controls.Add(_toggleAutoStart);
 
-            // 8. Action Buttons (Cancel & Save)
-            _btnCancel = new Button
+            _lblAutoStartStatus = new Label
+            {
+                Text = "Enabled",
+                Font = FluentTheme.Font(8.5f),
+                ForeColor = FluentTheme.TextSecondary,
+                Location = new Point(488, 79),
+                AutoSize = true
+            };
+            cardAutomation.Controls.Add(_lblAutoStartStatus);
+
+            _toggleAutoStart.CheckedChanged += (s, e) =>
+            {
+                _lblAutoStartStatus.Text = _toggleAutoStart.Checked ? "Active" : "Off";
+                _lblAutoStartStatus.ForeColor = _toggleAutoStart.Checked ? FluentTheme.Accent : FluentTheme.TextMuted;
+            };
+
+            currentY += 128;
+
+            // ==========================================
+            // 5. Bottom Action Bar
+            // ==========================================
+            var actionPanel = new Panel
+            {
+                Location = new Point(24, currentY),
+                Size = new Size(532, 44),
+                BackColor = Color.Transparent
+            };
+            rootPanel.Controls.Add(actionPanel);
+
+            _btnViewLogs = new FluentButton
+            {
+                Text = "📄 View Logs",
+                Location = new Point(0, 4),
+                Size = new Size(110, 36)
+            };
+            _btnViewLogs.Click += (s, e) =>
+            {
+                string path = Logger.GetLogFilePath();
+                if (System.IO.File.Exists(path))
+                {
+                    System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
+                    {
+                        FileName = path,
+                        UseShellExecute = true
+                    });
+                }
+                else
+                {
+                    MessageBox.Show("No log file found yet.", "XeroxGo Logs", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                }
+            };
+            actionPanel.Controls.Add(_btnViewLogs);
+
+            _btnCancel = new FluentButton
             {
                 Text = "Cancel",
-                Location = new Point(275, currentY),
-                Width = 100,
-                Height = 36,
-                BackColor = Color.FromArgb(241, 245, 249),
-                FlatStyle = FlatStyle.Flat
+                Location = new Point(286, 4),
+                Size = new Size(100, 36)
             };
             _btnCancel.Click += (s, e) => Close();
-            mainPanel.Controls.Add(_btnCancel);
+            actionPanel.Controls.Add(_btnCancel);
 
-            _btnSave = new Button
+            _btnSave = new FluentButton
             {
                 Text = "Save & Connect",
-                Location = new Point(385, currentY),
-                Width = 110,
-                Height = 36,
-                BackColor = Color.FromArgb(37, 99, 235), // Primary Blue
-                ForeColor = Color.White,
-                FlatStyle = FlatStyle.Flat,
-                Font = new Font("Segoe UI", 9.5f, FontStyle.Bold)
+                IsPrimary = true,
+                Location = new Point(396, 4),
+                Size = new Size(136, 36),
+                Font = FluentTheme.Font(9.5f, FontStyle.Bold)
             };
-            _btnSave.FlatAppearance.BorderSize = 0;
             _btnSave.Click += OnSaveClicked;
-            mainPanel.Controls.Add(_btnSave);
+            actionPanel.Controls.Add(_btnSave);
         }
 
         private void LoadValues()
@@ -252,7 +416,9 @@ namespace XeroxGo.PrinterAgent.UI
             _txtApiKey.Text = _config.AgentApiKey;
             _cmbLogicalSlot.Text = _config.LogicalPrinterName;
             _numPollInterval.Value = Math.Max(1, Math.Min(60, _config.PollIntervalSeconds));
-            _chkAutoStart.Checked = _config.AutoStartWithWindows;
+            _toggleAutoStart.Checked = _config.AutoStartWithWindows;
+            _lblAutoStartStatus.Text = _config.AutoStartWithWindows ? "Active" : "Off";
+            _lblAutoStartStatus.ForeColor = _config.AutoStartWithWindows ? FluentTheme.Accent : FluentTheme.TextMuted;
 
             PopulatePhysicalPrinters();
         }
@@ -269,7 +435,6 @@ namespace XeroxGo.PrinterAgent.UI
                 _cmbPhysicalPrinters.Items.Add(label);
             }
 
-            // Select active configured physical printer
             if (string.IsNullOrWhiteSpace(_config.PhysicalPrinterName) || _config.PhysicalPrinterName.Equals("Auto", StringComparison.OrdinalIgnoreCase))
             {
                 _cmbPhysicalPrinters.SelectedIndex = 0;
@@ -327,15 +492,10 @@ namespace XeroxGo.PrinterAgent.UI
             _config.LogicalPrinterName = logicalSlot;
             _config.PhysicalPrinterName = GetSelectedPhysicalPrinterName();
             _config.PollIntervalSeconds = (int)_numPollInterval.Value;
-            _config.AutoStartWithWindows = _chkAutoStart.Checked;
+            _config.AutoStartWithWindows = _toggleAutoStart.Checked;
 
-            // Persist to disk
             _config.Save();
-
-            // Update Registry auto-startup
             StartupManager.SetAutoStart(_config.AutoStartWithWindows);
-
-            // Notify runtime
             _onSaveCallback?.Invoke(_config);
 
             MessageBox.Show(

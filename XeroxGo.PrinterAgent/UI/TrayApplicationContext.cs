@@ -19,28 +19,37 @@ namespace XeroxGo.PrinterAgent.UI
         private readonly QueueWorker _worker;
         private SettingsForm? _settingsForm;
 
+        private string _currentStatusText = "Connecting...";
+        private string _currentStatusState = "idle";
+
         public TrayApplicationContext()
         {
             _config = AppConfig.Load();
 
-            // Set up context menu
-            _contextMenu = new ContextMenuStrip();
+            // Set up Windows 11 Fluent context menu
+            _contextMenu = new ContextMenuStrip
+            {
+                Renderer = new FluentContextMenuRenderer(),
+                Font = FluentTheme.Font(9.5f),
+                ShowImageMargin = false
+            };
 
             _statusHeaderItem = new ToolStripMenuItem("● XeroxGo: Connecting...")
             {
                 Enabled = false,
-                Font = new Font(Control.DefaultFont, FontStyle.Bold)
+                Font = FluentTheme.Font(9.5f, FontStyle.Bold),
+                ForeColor = FluentTheme.TextPrimary
             };
             _contextMenu.Items.Add(_statusHeaderItem);
             _contextMenu.Items.Add(new ToolStripSeparator());
 
-            _pauseResumeItem = new ToolStripMenuItem("⏸️ Pause Printing", null, OnTogglePause);
+            _pauseResumeItem = new ToolStripMenuItem("⏸️  Pause Printing", null, OnTogglePause);
             _contextMenu.Items.Add(_pauseResumeItem);
 
-            _contextMenu.Items.Add(new ToolStripMenuItem("⚙️ Printer Settings & Pairing...", null, OnOpenSettings));
-            _contextMenu.Items.Add(new ToolStripMenuItem("📄 View Activity Logs", null, OnViewLogs));
+            _contextMenu.Items.Add(new ToolStripMenuItem("⚙️  Printer Settings & Pairing...", null, OnOpenSettings));
+            _contextMenu.Items.Add(new ToolStripMenuItem("📄  View Activity Logs", null, OnViewLogs));
             _contextMenu.Items.Add(new ToolStripSeparator());
-            _contextMenu.Items.Add(new ToolStripMenuItem("❌ Exit Agent", null, OnExit));
+            _contextMenu.Items.Add(new ToolStripMenuItem("❌  Exit Agent", null, OnExit));
 
             // Set up NotifyIcon
             _trayIcon = new NotifyIcon
@@ -78,25 +87,30 @@ namespace XeroxGo.PrinterAgent.UI
 
             Color iconColor;
             string symbol;
+            _currentStatusState = status.ToLowerInvariant();
 
-            switch (status.ToLowerInvariant())
+            switch (_currentStatusState)
             {
                 case "printing":
                     iconColor = Color.FromArgb(16, 185, 129); // Vibrant Green
                     symbol = "🔵 Printing";
+                    _currentStatusText = "Actively Printing";
                     break;
                 case "paused":
                     iconColor = Color.FromArgb(245, 158, 11); // Amber
                     symbol = "🟡 Paused";
+                    _currentStatusText = "Printing Paused";
                     break;
                 case "error":
                 case "offline":
                     iconColor = Color.FromArgb(239, 68, 68); // Red
                     symbol = "🔴 " + status;
+                    _currentStatusText = status.ToUpperInvariant();
                     break;
                 default:
                     iconColor = Color.FromArgb(59, 130, 246); // Blue
-                    symbol = "🟢 Idle";
+                    symbol = "🟢 Connected";
+                    _currentStatusText = "Connected to Cloud";
                     break;
             }
 
@@ -108,17 +122,22 @@ namespace XeroxGo.PrinterAgent.UI
         private void OnTogglePause(object? sender, EventArgs e)
         {
             _worker.IsPaused = !_worker.IsPaused;
-            _pauseResumeItem.Text = _worker.IsPaused ? "▶️ Resume Printing" : "⏸️ Pause Printing";
+            _pauseResumeItem.Text = _worker.IsPaused ? "▶️  Resume Printing" : "⏸️  Pause Printing";
         }
 
         private void OnOpenSettings(object? sender, EventArgs e)
         {
             if (_settingsForm == null || _settingsForm.IsDisposed)
             {
-                _settingsForm = new SettingsForm(_config, (newConfig) =>
-                {
-                    _worker.ReloadConfiguration(newConfig);
-                });
+                _settingsForm = new SettingsForm(
+                    _config,
+                    (newConfig) =>
+                    {
+                        _worker.ReloadConfiguration(newConfig);
+                    },
+                    _currentStatusText,
+                    _currentStatusState
+                );
             }
 
             _settingsForm.Show();
