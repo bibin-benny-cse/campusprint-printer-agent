@@ -8,7 +8,6 @@
 
    Direct Clean Uninstall:
      & ([scriptblock]::Create((irm https://raw.githubusercontent.com/bibin-benny-cse/campusprint-printer-agent/main/install.ps1))) -Uninstall
-     (Or simply run the script above — if already installed, it interactively prompts you)
 ==============================================================================
 #>
 
@@ -55,7 +54,7 @@ function Invoke-CleanUninstall {
     Write-Host ""
 
     # 1. Stop active processes
-    Write-Host "⏳ [1/5] Stopping active XeroxGo Agent processes..." -ForegroundColor Yellow
+    Write-Host "⏳ [1/5] Stopping processes..." -ForegroundColor Yellow
     $processes = Get-Process -Name "XeroxGo.PrinterAgent", "XeroxGoAgent-Setup" -ErrorAction SilentlyContinue
     if ($processes) {
         $processes | Stop-Process -Force
@@ -66,7 +65,7 @@ function Invoke-CleanUninstall {
     }
 
     # 2. Run native uninstaller if present
-    Write-Host "⏳ [2/5] Running native uninstaller..." -ForegroundColor Yellow
+    Write-Host "⏳ [2/5] Running uninstaller..." -ForegroundColor Yellow
     $uninstallRegKeys = @(
         "HKCU:\Software\Microsoft\Windows\CurrentVersion\Uninstall\{D37F619C-5582-4BC2-91DE-7A419266F3A1}_is1",
         "HKLM:\Software\Microsoft\Windows\CurrentVersion\Uninstall\{D37F619C-5582-4BC2-91DE-7A419266F3A1}_is1"
@@ -91,13 +90,13 @@ function Invoke-CleanUninstall {
         }
     }
     if ($ranNative) {
-        Write-Host "   ✓ Native uninstaller completed." -ForegroundColor Green
+        Write-Host "   ✓ Uninstaller completed." -ForegroundColor Green
     } else {
-        Write-Host "   ℹ Native uninstaller not found; proceeding with direct purge." -ForegroundColor DarkGray
+        Write-Host "   ℹ Direct cleanup." -ForegroundColor DarkGray
     }
 
     # 3. Clean files & directories
-    Write-Host "⏳ [3/5] Purging application files & directories..." -ForegroundColor Yellow
+    Write-Host "⏳ [3/5] Removing application files..." -ForegroundColor Yellow
     $installDirs = @(
         (Join-Path $env:LOCALAPPDATA "Programs\XeroxGo Agent"),
         (Join-Path $env:ProgramFiles "XeroxGo Agent"),
@@ -111,16 +110,16 @@ function Invoke-CleanUninstall {
             Remove-Item -Path $dir -Recurse -Force -ErrorAction SilentlyContinue
         }
     }
-    Write-Host "   ✓ Program files purged." -ForegroundColor Green
+    Write-Host "   ✓ Files removed." -ForegroundColor Green
 
     # 4. Purge configuration and data
-    Write-Host "⏳ [4/5] Purging configuration, logs, and temp queues..." -ForegroundColor Yellow
+    Write-Host "⏳ [4/5] Removing configuration and cache..." -ForegroundColor Yellow
     $dataDir = Join-Path $env:LOCALAPPDATA "XeroxGo"
     if (Test-Path $dataDir) {
         Remove-Item -Path $dataDir -Recurse -Force -ErrorAction SilentlyContinue
-        Write-Host "   ✓ Removed $dataDir" -ForegroundColor Green
+        Write-Host "   ✓ Removed." -ForegroundColor Green
     } else {
-        Write-Host "   ✓ No residual data directory found." -ForegroundColor DarkGray
+        Write-Host "   ✓ Clean." -ForegroundColor DarkGray
     }
 
     # Clean shortcuts and startup keys
@@ -150,7 +149,7 @@ function Invoke-CleanUninstall {
     }
 
     # 5. Remove certificates
-    Write-Host "⏳ [5/5] Cleaning certificate store..." -ForegroundColor Yellow
+    Write-Host "⏳ [5/5] Removing certificates..." -ForegroundColor Yellow
     $certStores = @(
         "Cert:\CurrentUser\TrustedPublisher",
         "Cert:\CurrentUser\Root",
@@ -168,7 +167,7 @@ function Invoke-CleanUninstall {
             } catch {}
         }
     }
-    Write-Host "   ✓ Publisher certificates removed." -ForegroundColor Green
+    Write-Host "   ✓ Certificates removed." -ForegroundColor Green
 
     # Cleanup temp caches & crash dumps
     $tempDir = Join-Path $env:TEMP "XeroxGoInstall"
@@ -183,8 +182,7 @@ function Invoke-CleanUninstall {
 
     Write-Host ""
     Write-Host "================================================================" -ForegroundColor Cyan
-    Write-Host "✨ XeroxGo Agent has been cleanly and fully uninstalled!" -ForegroundColor Green
-    Write-Host "   Every file, directory, registry key, shortcut, and certificate has been purged." -ForegroundColor Green
+    Write-Host "✨ XeroxGo Agent has been uninstalled." -ForegroundColor Green
     Write-Host "================================================================" -ForegroundColor Cyan
     Write-Host ""
 }
@@ -207,19 +205,18 @@ function Invoke-InstallOrUpdate {
 
     # 2. Download installer
     $installerUrl = "$ReleaseBaseUrl/XeroxGoAgent-Setup.exe"
-    Write-Host "⏳ [1/3] Downloading latest XeroxGoAgent-Setup.exe..." -ForegroundColor Yellow
+    Write-Host "⏳ [1/3] Downloading installer..." -ForegroundColor Yellow
     try {
         Invoke-WebRequest -Uri $installerUrl -OutFile $installerPath -UseBasicParsing
-        Write-Host "   ✓ Installer downloaded successfully." -ForegroundColor Green
+        Write-Host "   ✓ Download complete." -ForegroundColor Green
     } catch {
-        Write-Host "   ❌ Failed to download installer from: $installerUrl" -ForegroundColor Red
-        Write-Host "   Error: $_" -ForegroundColor Red
+        Write-Host "   ❌ Download failed from: $installerUrl" -ForegroundColor Red
         return
     }
 
     # 3. Register publisher certificate for current user
     $certUrl = "$ReleaseBaseUrl/XeroxGo-Publisher-Certificate.cer"
-    Write-Host "⏳ [2/3] Registering Verified Publisher certificate..." -ForegroundColor Yellow
+    Write-Host "⏳ [2/3] Registering publisher certificate..." -ForegroundColor Yellow
     try {
         Invoke-WebRequest -Uri $certUrl -OutFile $certPath -UseBasicParsing
         if (Get-Command Import-Certificate -ErrorAction SilentlyContinue) {
@@ -228,21 +225,19 @@ function Invoke-InstallOrUpdate {
         } else {
             & certutil -user -addstore "TrustedPublisher" $certPath | Out-Null
         }
-        Write-Host "   ✓ Publisher verified for Current User." -ForegroundColor Green
-    } catch {
-        Write-Host "   ℹ Note: Certificate auto-registration skipped ($($_)). Continuing..." -ForegroundColor DarkGray
-    }
+        Write-Host "   ✓ Certificate registered." -ForegroundColor Green
+    } catch {}
 
     # 4. Remove Mark of the Web
-    Write-Host "⏳ [3/3] Preparing installer execution..." -ForegroundColor Yellow
+    Write-Host "⏳ [3/3] Preparing installer..." -ForegroundColor Yellow
     if (Get-Command Unblock-File -ErrorAction SilentlyContinue) {
         Unblock-File -Path $installerPath -ErrorAction SilentlyContinue
     }
-    Write-Host "   ✓ Installer verified and unblocked." -ForegroundColor Green
+    Write-Host "   ✓ Verified." -ForegroundColor Green
 
     Write-Host ""
     Write-Host "================================================================" -ForegroundColor Cyan
-    Write-Host "🚀 Launching XeroxGo Agent Setup Wizard..." -ForegroundColor Green
+    Write-Host "🚀 Launching setup wizard..." -ForegroundColor Green
     Write-Host "================================================================" -ForegroundColor Cyan
     Write-Host ""
 
@@ -262,13 +257,13 @@ if ($Uninstall -or ($Action -eq 'uninstall') -or ($env:XEROXGO_ACTION -eq 'unins
     if (Test-IsInstalled) {
         Write-Host ""
         Write-Host "================================================================" -ForegroundColor Cyan
-        Write-Host "  ℹ XeroxGo Agent is currently installed on this system." -ForegroundColor Yellow
+        Write-Host "  ℹ XeroxGo Agent is already installed on this system." -ForegroundColor Yellow
         Write-Host "================================================================" -ForegroundColor Cyan
         Write-Host ""
         Write-Host "Please select an option:"
-        Write-Host "  [1] Reinstall / Update to Latest Version" -ForegroundColor Green
-        Write-Host "  [2] Full Clean Uninstall (Removes app, configs, logs, certs)" -ForegroundColor Red
-        Write-Host "  [Q] Cancel / Exit" -ForegroundColor DarkGray
+        Write-Host "  [1] Reinstall / Update" -ForegroundColor Green
+        Write-Host "  [2] Uninstall" -ForegroundColor Red
+        Write-Host "  [Q] Cancel" -ForegroundColor DarkGray
         Write-Host ""
         $choice = Read-Host "Enter choice (1, 2, or Q)"
         if ($choice -eq '2') {
