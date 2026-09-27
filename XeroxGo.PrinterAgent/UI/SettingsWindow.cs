@@ -52,7 +52,7 @@ namespace XeroxGo.PrinterAgent.UI
         {
             SuspendLayout();
 
-            Text = "XeroxGo — Agent Settings";
+            Text = "XeroxGo Agent";
             ClientSize = new Size(560, 668);
             FormBorderStyle = FormBorderStyle.FixedDialog;
             MaximizeBox = false;
@@ -108,25 +108,16 @@ namespace XeroxGo.PrinterAgent.UI
             };
             _headerPanel.Controls.Add(logoBox);
 
-            // Title & Subtitle
+            // Title
             var lblTitle = new Label
             {
                 Text = "XeroxGo Agent",
-                Font = FluentTheme.Font(13f, FontStyle.Bold),
+                Font = FluentTheme.Font(14f, FontStyle.Bold),
                 ForeColor = FluentTheme.TextPrimary,
-                Location = new Point(74, 4),
-                AutoSize = true
-            };
-            var lblSubtitle = new Label
-            {
-                Text = "CampusPrint Kiosk Counter Spooler Daemon",
-                Font = FluentTheme.Font(8.5f),
-                ForeColor = FluentTheme.TextSecondary,
-                Location = new Point(74, 29),
+                Location = new Point(74, 15),
                 AutoSize = true
             };
             _headerPanel.Controls.Add(lblTitle);
-            _headerPanel.Controls.Add(lblSubtitle);
 
             // Status Badge (Top Right)
             _statusBadge = new FluentStatusBadge();
