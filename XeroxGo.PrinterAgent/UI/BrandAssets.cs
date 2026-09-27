@@ -12,11 +12,12 @@ namespace XeroxGo.PrinterAgent.UI
     public static class BrandAssets
     {
         private static Image? _logo;
+        private static Image? _logoGlyph;
         private static Icon? _appIcon;
         private static readonly object _lock = new object();
 
         /// <summary>
-        /// Official high-resolution XeroxGo emblem logo.
+        /// Official transparent XeroxGo emblem logo (1024x1024 centered).
         /// </summary>
         public static Image? Logo
         {
@@ -28,29 +29,33 @@ namespace XeroxGo.PrinterAgent.UI
                     {
                         if (_logo == null)
                         {
-                            try
-                            {
-                                var assembly = Assembly.GetExecutingAssembly();
-                                var resName = assembly.GetManifestResourceNames()
-                                    .FirstOrDefault(n => n.EndsWith("logo.png", StringComparison.OrdinalIgnoreCase));
-
-                                if (!string.IsNullOrEmpty(resName))
-                                {
-                                    using var stream = assembly.GetManifestResourceStream(resName);
-                                    if (stream != null)
-                                    {
-                                        _logo = Image.FromStream(stream);
-                                    }
-                                }
-                            }
-                            catch
-                            {
-                                // Graceful fallback
-                            }
+                            _logo = LoadEmbeddedImage("logo.png");
                         }
                     }
                 }
                 return _logo;
+            }
+        }
+
+        /// <summary>
+        /// Official tight-cropped transparent XeroxGo glyph (aspect ratio ~1.96).
+        /// Ideal for header and inline display without wasted vertical padding.
+        /// </summary>
+        public static Image? LogoGlyph
+        {
+            get
+            {
+                if (_logoGlyph == null)
+                {
+                    lock (_lock)
+                    {
+                        if (_logoGlyph == null)
+                        {
+                            _logoGlyph = LoadEmbeddedImage("logo_glyph.png") ?? Logo;
+                        }
+                    }
+                }
+                return _logoGlyph;
             }
         }
 
@@ -91,6 +96,30 @@ namespace XeroxGo.PrinterAgent.UI
                 }
                 return _appIcon;
             }
+        }
+
+        private static Image? LoadEmbeddedImage(string fileName)
+        {
+            try
+            {
+                var assembly = Assembly.GetExecutingAssembly();
+                var resName = assembly.GetManifestResourceNames()
+                    .FirstOrDefault(n => n.EndsWith(fileName, StringComparison.OrdinalIgnoreCase));
+
+                if (!string.IsNullOrEmpty(resName))
+                {
+                    using var stream = assembly.GetManifestResourceStream(resName);
+                    if (stream != null)
+                    {
+                        return Image.FromStream(stream);
+                    }
+                }
+            }
+            catch
+            {
+                // Graceful fallback
+            }
+            return null;
         }
     }
 }

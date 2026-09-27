@@ -81,11 +81,11 @@ namespace XeroxGo.PrinterAgent.UI
                 BackColor = FluentTheme.Background
             };
 
-            // Official XeroxGo Logo Icon
+            // Official XeroxGo Logo (Transparent Emblem)
             var logoBox = new PictureBox
             {
-                Location = new Point(0, 7),
-                Size = new Size(40, 40),
+                Location = new Point(0, 11),
+                Size = new Size(63, 32),
                 BackColor = Color.Transparent
             };
             logoBox.Paint += (s, e) =>
@@ -100,16 +100,11 @@ namespace XeroxGo.PrinterAgent.UI
                     g.FillRectangle(bgBrush, logoBox.ClientRectangle);
                 }
 
-                if (BrandAssets.Logo != null)
+                var logo = BrandAssets.LogoGlyph ?? BrandAssets.Logo;
+                if (logo != null)
                 {
-                    g.DrawImage(BrandAssets.Logo, new Rectangle(0, 0, logoBox.Width, logoBox.Height));
+                    g.DrawImage(logo, new Rectangle(0, 0, logoBox.Width, logoBox.Height));
                 }
-
-                // Subtle 1px rounded border matching Windows 11 Fluent cards
-                var strokeRect = new RectangleF(0.5f, 0.5f, logoBox.Width - 1f, logoBox.Height - 1f);
-                using var strokePath = FluentTheme.CreateRoundedPath(strokeRect, 8f);
-                using var borderPen = new Pen(Color.FromArgb(226, 232, 240), 1f); // Slate 200
-                g.DrawPath(borderPen, strokePath);
             };
             _headerPanel.Controls.Add(logoBox);
 
@@ -119,7 +114,7 @@ namespace XeroxGo.PrinterAgent.UI
                 Text = "XeroxGo Agent",
                 Font = FluentTheme.Font(13f, FontStyle.Bold),
                 ForeColor = FluentTheme.TextPrimary,
-                Location = new Point(48, 4),
+                Location = new Point(74, 4),
                 AutoSize = true
             };
             var lblSubtitle = new Label
@@ -127,7 +122,7 @@ namespace XeroxGo.PrinterAgent.UI
                 Text = "CampusPrint Kiosk Counter Spooler Daemon",
                 Font = FluentTheme.Font(8.5f),
                 ForeColor = FluentTheme.TextSecondary,
-                Location = new Point(48, 29),
+                Location = new Point(74, 29),
                 AutoSize = true
             };
             _headerPanel.Controls.Add(lblTitle);

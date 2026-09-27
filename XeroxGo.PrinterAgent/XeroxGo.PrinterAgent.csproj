@@ -43,6 +43,7 @@
 
   <ItemGroup>
     <EmbeddedResource Include="Resources\logo.png" />
+    <EmbeddedResource Include="Resources\logo_glyph.png" />
     <EmbeddedResource Include="Resources\app.ico" />
   </ItemGroup>
 
