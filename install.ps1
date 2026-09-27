@@ -1,15 +1,14 @@
 <#
 ==============================================================================
- XeroxGo Windows Printer Agent - Installer & Uninstaller
+ XeroxGo Windows Printer Agent - Unified Setup Manager (Install / Clean Uninstall)
  
  Quick One-Liners:
    Install / Update:
      irm https://raw.githubusercontent.com/bibin-benny-cse/campusprint-printer-agent/main/install.ps1 | iex
 
-   Clean Uninstall:
-     irm https://raw.githubusercontent.com/bibin-benny-cse/campusprint-printer-agent/main/uninstall.ps1 | iex
-     OR:
+   Direct Clean Uninstall:
      & ([scriptblock]::Create((irm https://raw.githubusercontent.com/bibin-benny-cse/campusprint-printer-agent/main/install.ps1))) -Uninstall
+     (Or simply run the script above — if already installed, it interactively prompts you)
 ==============================================================================
 #>
 
@@ -220,9 +219,9 @@ function Invoke-InstallOrUpdate {
 
 # Determine Action
 $targetAction = ""
-if ($Uninstall -or ($Action -eq 'uninstall')) {
+if ($Uninstall -or ($Action -eq 'uninstall') -or ($env:XEROXGO_ACTION -eq 'uninstall') -or ($env:UNINSTALL -eq '1')) {
     $targetAction = "uninstall"
-} elseif ($Install -or ($Action -eq 'install')) {
+} elseif ($Install -or ($Action -eq 'install') -or ($env:XEROXGO_ACTION -eq 'install')) {
     $targetAction = "install"
 } else {
     # Interactive check: If already installed, offer choice
