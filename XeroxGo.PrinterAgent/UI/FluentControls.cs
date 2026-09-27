@@ -125,6 +125,24 @@ namespace XeroxGo.PrinterAgent.UI
 
         public static GraphicsPath CreateRoundedPath(Rectangle rect, int radius) =>
             CreateRoundedPath(new RectangleF(rect.X, rect.Y, rect.Width, rect.Height), radius);
+
+        /// <summary>
+        /// Resolves the actual solid background color of the control's hierarchy.
+        /// Avoids GDI+ pseudo-transparency bugs where Color.Transparent leaves unpainted pixels.
+        /// </summary>
+        public static Color GetEffectiveBackColor(Control control)
+        {
+            Control? p = control.Parent;
+            while (p != null)
+            {
+                if (p.BackColor != Color.Transparent && p.BackColor.A == 255)
+                {
+                    return p.BackColor;
+                }
+                p = p.Parent;
+            }
+            return Background;
+        }
     }
     #endregion
 
@@ -200,10 +218,10 @@ namespace XeroxGo.PrinterAgent.UI
             g.SmoothingMode = SmoothingMode.AntiAlias;
             g.PixelOffsetMode = PixelOffsetMode.HighQuality;
 
-            // 1. Clear with parent background so corners blend smoothly
-            if (Parent != null)
+            // 1. Clear with true ancestor background so corners blend smoothly
+            Color parentBg = FluentTheme.GetEffectiveBackColor(this);
+            using (var parentBrush = new SolidBrush(parentBg))
             {
-                using var parentBrush = new SolidBrush(Parent.BackColor);
                 g.FillRectangle(parentBrush, ClientRectangle);
             }
 
@@ -301,9 +319,9 @@ namespace XeroxGo.PrinterAgent.UI
             g.SmoothingMode = SmoothingMode.AntiAlias;
             g.PixelOffsetMode = PixelOffsetMode.HighQuality;
 
-            if (Parent != null)
+            Color parentBg = FluentTheme.GetEffectiveBackColor(this);
+            using (var parentBrush = new SolidBrush(parentBg))
             {
-                using var parentBrush = new SolidBrush(Parent.BackColor);
                 g.FillRectangle(parentBrush, ClientRectangle);
             }
 
@@ -339,7 +357,8 @@ namespace XeroxGo.PrinterAgent.UI
     }
 
     /// <summary>
-    /// Modern Windows 11 button with crisp 4px corner radius, vector icons, and stateful hover/press rendering.
+    /// Modern Windows 11 button with crisp 4px corner radius, vector icons, and solid background pre-fill.
+    /// Completely eliminates stray corner pixels while preserving smooth anti-aliased curves.
     /// </summary>
     public class FluentButton : Button
     {
@@ -370,9 +389,10 @@ namespace XeroxGo.PrinterAgent.UI
             g.SmoothingMode = SmoothingMode.AntiAlias;
             g.PixelOffsetMode = PixelOffsetMode.HighQuality;
 
-            if (Parent != null)
+            // Clear with true solid parent background to prevent rogue unpainted pixels
+            Color parentBg = FluentTheme.GetEffectiveBackColor(this);
+            using (var parentBrush = new SolidBrush(parentBg))
             {
-                using var parentBrush = new SolidBrush(Parent.BackColor);
                 g.FillRectangle(parentBrush, ClientRectangle);
             }
 
@@ -580,9 +600,9 @@ namespace XeroxGo.PrinterAgent.UI
             g.SmoothingMode = SmoothingMode.AntiAlias;
             g.PixelOffsetMode = PixelOffsetMode.HighQuality;
 
-            if (Parent != null)
+            Color parentBg = FluentTheme.GetEffectiveBackColor(this);
+            using (var parentBrush = new SolidBrush(parentBg))
             {
-                using var parentBrush = new SolidBrush(Parent.BackColor);
                 g.FillRectangle(parentBrush, ClientRectangle);
             }
 
@@ -633,7 +653,7 @@ namespace XeroxGo.PrinterAgent.UI
 
     /// <summary>
     /// Executive-grade auto-sizing status capsule with state-tinted background and pulse dot.
-    /// Perfectly centered text and dot baseline with zero capsule distortion.
+    /// Uses hierarchy background resolution to guarantee smooth curves with zero rectangular bleed.
     /// </summary>
     public class FluentStatusBadge : Control
     {
@@ -707,9 +727,10 @@ namespace XeroxGo.PrinterAgent.UI
             g.SmoothingMode = SmoothingMode.AntiAlias;
             g.PixelOffsetMode = PixelOffsetMode.HighQuality;
 
-            if (Parent != null)
+            // Clear with true solid parent background to completely eliminate rectangular shadow
+            Color parentBg = FluentTheme.GetEffectiveBackColor(this);
+            using (var parentBrush = new SolidBrush(parentBg))
             {
-                using var parentBrush = new SolidBrush(Parent.BackColor);
                 g.FillRectangle(parentBrush, ClientRectangle);
             }
 
@@ -725,7 +746,7 @@ namespace XeroxGo.PrinterAgent.UI
             using var borderPen = new Pen(_badgeBorder, 1f);
             g.DrawPath(borderPen, strokePath);
 
-            // Centered dot
+            // Centered status dot
             float dotSize = 7.0f;
             float dotX = 12f;
             float dotY = (Height - dotSize) / 2.0f;

@@ -72,14 +72,14 @@ namespace XeroxGo.PrinterAgent.UI
             _headerPanel = new Panel
             {
                 Location = new Point(marginX, currentY),
-                Size = new Size(contentWidth, 48),
-                BackColor = Color.Transparent
+                Size = new Size(contentWidth, 54),
+                BackColor = FluentTheme.Background
             };
 
             // Modern Blue Logo Icon
             var logoBox = new PictureBox
             {
-                Location = new Point(0, 4),
+                Location = new Point(0, 7),
                 Size = new Size(40, 40),
                 BackColor = Color.Transparent
             };
@@ -88,6 +88,11 @@ namespace XeroxGo.PrinterAgent.UI
                 var g = e.Graphics;
                 g.SmoothingMode = SmoothingMode.AntiAlias;
                 g.PixelOffsetMode = PixelOffsetMode.HighQuality;
+
+                using (var bgBrush = new SolidBrush(FluentTheme.Background))
+                {
+                    g.FillRectangle(bgBrush, logoBox.ClientRectangle);
+                }
 
                 var fillRect = new RectangleF(0, 0, 40, 40);
                 using var path = FluentTheme.CreateRoundedPath(fillRect, 8f);
@@ -141,7 +146,7 @@ namespace XeroxGo.PrinterAgent.UI
                 Text = "CampusPrint Kiosk Counter Spooler Daemon",
                 Font = FluentTheme.Font(8.5f),
                 ForeColor = FluentTheme.TextSecondary,
-                Location = new Point(48, 26),
+                Location = new Point(48, 29),
                 AutoSize = true
             };
             _headerPanel.Controls.Add(lblTitle);
@@ -150,7 +155,7 @@ namespace XeroxGo.PrinterAgent.UI
             // Status Badge (Top Right)
             _statusBadge = new FluentStatusBadge();
             _statusBadge.SetStatus(currentStatus, statusState);
-            _statusBadge.Location = new Point(contentWidth - _statusBadge.Width, 10);
+            _statusBadge.Location = new Point(contentWidth - _statusBadge.Width, 13);
             _headerPanel.Controls.Add(_statusBadge);
 
             Controls.Add(_headerPanel);
@@ -348,7 +353,7 @@ namespace XeroxGo.PrinterAgent.UI
             {
                 Location = new Point(marginX, currentY),
                 Size = new Size(contentWidth, 36),
-                BackColor = Color.Transparent
+                BackColor = FluentTheme.Background
             };
 
             _btnTestSlip = new FluentButton
@@ -528,7 +533,7 @@ namespace XeroxGo.PrinterAgent.UI
             if (_headerPanel != null)
             {
                 int contentWidth = ClientSize.Width - (24 * 2);
-                _statusBadge.Location = new Point(contentWidth - _statusBadge.Width, 10);
+                _statusBadge.Location = new Point(contentWidth - _statusBadge.Width, 13);
             }
         }
 
