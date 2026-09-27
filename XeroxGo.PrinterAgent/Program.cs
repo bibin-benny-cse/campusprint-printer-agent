@@ -49,14 +49,8 @@ namespace XeroxGo.PrinterAgent
             Application.EnableVisualStyles();
             Application.SetCompatibleTextRenderingDefault(false);
 
-            // Initialize WPF Application Context for Fluent vector windows
-            if (System.Windows.Application.Current == null)
-            {
-                _ = new System.Windows.Application
-                {
-                    ShutdownMode = System.Windows.ShutdownMode.OnExplicitShutdown
-                };
-            }
+            // 4. Memory Optimization: Enable background working set trimming
+            MemoryOptimizer.InitializePeriodicTrimming(3);
 
             try
             {

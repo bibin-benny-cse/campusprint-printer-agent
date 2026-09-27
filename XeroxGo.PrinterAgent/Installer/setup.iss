@@ -2,7 +2,7 @@
 ; Generates a clean 1-click installer: XeroxGoAgent-Setup.exe
 
 #define MyAppName "XeroxGo Printer Agent"
-#define MyAppVersion "0.1.3"
+#define MyAppVersion "0.1.4"
 #define MyAppPublisher "XeroxGo Technologies"
 #define MyAppURL "https://xeroxgo.com"
 #define MyAppExeName "XeroxGo.PrinterAgent.exe"

@@ -219,6 +219,7 @@ namespace XeroxGo.PrinterAgent.Services
                     CleanupFile(processedResult.FilePath);
                 }
                 _isProcessing = false;
+                MemoryOptimizer.TrimMemory();
             }
         }
 

@@ -13,9 +13,9 @@
     <AssemblyName>XeroxGo.PrinterAgent</AssemblyName>
     <RootNamespace>XeroxGo.PrinterAgent</RootNamespace>
     
-    <Version>0.1.3</Version>
-    <AssemblyVersion>0.1.3.0</AssemblyVersion>
-    <FileVersion>0.1.3.0</FileVersion>
+    <Version>0.1.4</Version>
+    <AssemblyVersion>0.1.4.0</AssemblyVersion>
+    <FileVersion>0.1.4.0</FileVersion>
     <Product>XeroxGo Windows Printer Agent</Product>
     <Company>XeroxGo Technologies</Company>
     
@@ -24,6 +24,11 @@
     <SelfContained>true</SelfContained>
     <RuntimeIdentifier>win-x64</RuntimeIdentifier>
     <PublishTrimmed>false</PublishTrimmed>
+
+    <!-- Memory Optimization for Client/Tray Services (Forces Workstation GC and trims segment bloat) -->
+    <ServerGarbageCollection>false</ServerGarbageCollection>
+    <ConcurrentGarbageCollection>true</ConcurrentGarbageCollection>
+    <RetainVMGarbageCollection>false</RetainVMGarbageCollection>
   </PropertyGroup>
 
   <ItemGroup>

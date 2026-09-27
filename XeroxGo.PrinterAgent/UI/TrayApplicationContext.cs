@@ -75,6 +75,9 @@ namespace XeroxGo.PrinterAgent.UI
             {
                 StartupManager.SetAutoStart(_config.AutoStartWithWindows);
             }
+
+            // Immediately flush startup/JIT memory pages to maintain minimal RAM footprint (~15-25 MB)
+            MemoryOptimizer.TrimMemory();
         }
 
         private void OnWorkerStatusChanged(string status, string printerName)
@@ -136,6 +139,15 @@ namespace XeroxGo.PrinterAgent.UI
 
         private void OnOpenSettings(object? sender, EventArgs e)
         {
+            // Lazily initialize WPF runtime only when user opens settings
+            if (System.Windows.Application.Current == null)
+            {
+                _ = new System.Windows.Application
+                {
+                    ShutdownMode = System.Windows.ShutdownMode.OnExplicitShutdown
+                };
+            }
+
             if (_settingsWindow == null || !_settingsWindow.IsLoaded)
             {
                 _settingsWindow = new SettingsWindow(
@@ -147,7 +159,12 @@ namespace XeroxGo.PrinterAgent.UI
                     _currentStatusText,
                     _currentStatusState
                 );
-                _settingsWindow.Closed += (s, ev) => _settingsWindow = null;
+                _settingsWindow.Closed += (s, ev) =>
+                {
+                    _settingsWindow = null;
+                    // Flush WPF memory allocations back to OS
+                    MemoryOptimizer.TrimMemory();
+                };
             }
 
             _settingsWindow.Show();
