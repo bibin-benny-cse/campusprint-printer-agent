@@ -235,18 +235,28 @@ function Invoke-InstallOrUpdate {
     Write-Host "⏳ [2/3] Registering publisher certificate..." -ForegroundColor Yellow
     try {
         Invoke-WebRequest -Uri $certUrl -OutFile $certPath -UseBasicParsing
-        # Try registering in LocalMachine (if elevated) for system-wide Smart App Control
-        try {
-            if (Get-Command Import-Certificate -ErrorAction SilentlyContinue) {
-                Import-Certificate -FilePath $certPath -CertStoreLocation "Cert:\LocalMachine\TrustedPublisher" -ErrorAction Stop | Out-Null
-                Import-Certificate -FilePath $certPath -CertStoreLocation "Cert:\LocalMachine\Root" -ErrorAction Stop | Out-Null
-            } else {
-                & certutil -addstore -f "TrustedPublisher" $certPath | Out-Null
-                & certutil -addstore -f "ROOT" $certPath | Out-Null
+        
+        $isAdmin = ([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
+        if ($isAdmin) {
+            & certutil -addstore -f "TrustedPublisher" $certPath | Out-Null
+            & certutil -addstore -f "ROOT" $certPath | Out-Null
+        } else {
+            # Check if certificate is already present in LocalMachine store
+            $alreadyTrusted = $false
+            if (Test-Path "Cert:\LocalMachine\TrustedPublisher") {
+                $found = Get-ChildItem -Path "Cert:\LocalMachine\TrustedPublisher" -ErrorAction SilentlyContinue |
+                    Where-Object { $_.Subject -like "*CN=XeroxGo Technologies*" }
+                if ($found) { $alreadyTrusted = $true }
             }
-        } catch {}
+            if (-not $alreadyTrusted) {
+                try {
+                    $regCmd = "certutil -addstore -f 'TrustedPublisher' '$certPath'; certutil -addstore -f 'ROOT' '$certPath'"
+                    Start-Process powershell.exe -ArgumentList "-NoProfile", "-ExecutionPolicy", "Bypass", "-Command", $regCmd -Verb RunAs -Wait -ErrorAction Stop
+                } catch {}
+            }
+        }
 
-        # Always register in CurrentUser store
+        # Always also register in CurrentUser store
         if (Get-Command Import-Certificate -ErrorAction SilentlyContinue) {
             Import-Certificate -FilePath $certPath -CertStoreLocation "Cert:\CurrentUser\TrustedPublisher" -ErrorAction SilentlyContinue | Out-Null
             Import-Certificate -FilePath $certPath -CertStoreLocation "Cert:\CurrentUser\Root" -ErrorAction SilentlyContinue | Out-Null
@@ -271,10 +281,19 @@ function Invoke-InstallOrUpdate {
     Write-Host ""
 
     # 5. Launch installer
-    if ($Silent) {
-        Start-Process -FilePath $installerPath -ArgumentList "/SILENT", "/VERYSILENT", "/SUPPRESSMSGBOXES" -Wait
-    } else {
-        Start-Process -FilePath $installerPath -Wait
+    try {
+        if ($Silent) {
+            Start-Process -FilePath $installerPath -ArgumentList "/SILENT", "/VERYSILENT", "/SUPPRESSMSGBOXES" -Wait -ErrorAction Stop
+        } else {
+            Start-Process -FilePath $installerPath -Wait -ErrorAction Stop
+        }
+    } catch {
+        # If standard user execution is blocked by Smart App Control, elevate installer
+        if ($Silent) {
+            Start-Process -FilePath $installerPath -ArgumentList "/SILENT", "/VERYSILENT", "/SUPPRESSMSGBOXES" -Verb RunAs -Wait
+        } else {
+            Start-Process -FilePath $installerPath -Verb RunAs -Wait
+        }
     }
 
     # Ensure any installed files are unblocked
