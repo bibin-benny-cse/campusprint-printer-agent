@@ -92,7 +92,7 @@ function Invoke-CleanUninstall {
     if ($ranNative) {
         Write-Host "   ✓ Uninstaller completed." -ForegroundColor Green
     } else {
-        Write-Host "   ℹ Direct cleanup." -ForegroundColor DarkGray
+        Write-Host "   ℹ Native uninstaller not found; running direct cleanup." -ForegroundColor DarkGray
     }
 
     # 3. Clean files & directories
@@ -117,9 +117,9 @@ function Invoke-CleanUninstall {
     $dataDir = Join-Path $env:LOCALAPPDATA "XeroxGo"
     if (Test-Path $dataDir) {
         Remove-Item -Path $dataDir -Recurse -Force -ErrorAction SilentlyContinue
-        Write-Host "   ✓ Removed." -ForegroundColor Green
+        Write-Host "   ✓ Configuration and cache removed." -ForegroundColor Green
     } else {
-        Write-Host "   ✓ Clean." -ForegroundColor DarkGray
+        Write-Host "   ✓ No configuration found." -ForegroundColor DarkGray
     }
 
     # Clean shortcuts and startup keys
@@ -156,18 +156,26 @@ function Invoke-CleanUninstall {
         "Cert:\LocalMachine\TrustedPublisher",
         "Cert:\LocalMachine\Root"
     )
+    $removedCerts = 0
     foreach ($store in $certStores) {
         if (Test-Path $store) {
             try {
-                Get-ChildItem -Path $store -ErrorAction SilentlyContinue |
-                    Where-Object { $_.Subject -like "*CN=XeroxGo Technologies*" } |
-                    ForEach-Object {
+                $certs = Get-ChildItem -Path $store -ErrorAction SilentlyContinue |
+                    Where-Object { $_.Subject -like "*CN=XeroxGo Technologies*" }
+                if ($certs) {
+                    $certs | ForEach-Object {
                         Remove-Item -Path $_.PSPath -Force -ErrorAction SilentlyContinue
+                        $removedCerts++
                     }
+                }
             } catch {}
         }
     }
-    Write-Host "   ✓ Certificates removed." -ForegroundColor Green
+    if ($removedCerts -gt 0) {
+        Write-Host "   ✓ Certificates removed." -ForegroundColor Green
+    } else {
+        Write-Host "   ✓ No certificates found." -ForegroundColor DarkGray
+    }
 
     # Cleanup temp caches & crash dumps
     $tempDir = Join-Path $env:TEMP "XeroxGoInstall"
@@ -233,7 +241,7 @@ function Invoke-InstallOrUpdate {
     if (Get-Command Unblock-File -ErrorAction SilentlyContinue) {
         Unblock-File -Path $installerPath -ErrorAction SilentlyContinue
     }
-    Write-Host "   ✓ Verified." -ForegroundColor Green
+    Write-Host "   ✓ Ready to launch." -ForegroundColor Green
 
     Write-Host ""
     Write-Host "================================================================" -ForegroundColor Cyan
