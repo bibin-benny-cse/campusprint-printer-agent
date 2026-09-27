@@ -14,6 +14,8 @@ temp/
 .env
 .env.local
 
-# System files
-.DS_Store
-Thumbs.db
+# Build outputs
+bin/
+obj/
+*.exe
+Installer/Output/
