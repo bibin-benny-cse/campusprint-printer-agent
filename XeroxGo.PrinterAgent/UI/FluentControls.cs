@@ -36,7 +36,7 @@ namespace XeroxGo.PrinterAgent.UI
                 int roundCorner = DWMWCP_ROUND;
                 DwmSetWindowAttribute(handle, DWMWA_WINDOW_CORNER_PREFERENCE, ref roundCorner, sizeof(int));
 
-                // 2. Light mode / subtle caption bar matching the window (0x00BBGGRR: R=248, G=250, B=252)
+                // 2. Subtle caption bar matching the window (0x00BBGGRR: R=248, G=250, B=252)
                 int captionColor = 0x00FCFAF8;
                 DwmSetWindowAttribute(handle, DWMWA_CAPTION_COLOR, ref captionColor, sizeof(int));
             }
@@ -86,28 +86,45 @@ namespace XeroxGo.PrinterAgent.UI
         public static readonly Color Warning = Color.FromArgb(245, 158, 11);         // Amber 500
         public static readonly Color Danger = Color.FromArgb(239, 68, 68);           // Rose 500
 
-        public static GraphicsPath CreateRoundedPath(Rectangle rect, int radius)
+        /// <summary>
+        /// Generates a perfectly proportioned rounded rectangle path with sub-pixel clamp protection.
+        /// </summary>
+        public static GraphicsPath CreateRoundedPath(RectangleF rect, float radius)
         {
             var path = new GraphicsPath();
-            if (radius <= 0)
+            if (radius <= 0.01f)
             {
                 path.AddRectangle(rect);
                 return path;
             }
 
-            int diameter = radius * 2;
-            var arc = new Rectangle(rect.X, rect.Y, diameter, diameter);
+            float diameter = radius * 2f;
+            if (diameter > rect.Width) diameter = rect.Width;
+            if (diameter > rect.Height) diameter = rect.Height;
 
+            var arc = new RectangleF(rect.X, rect.Y, diameter, diameter);
+
+            // Top-Left Arc
             path.AddArc(arc, 180, 90);
+
+            // Top-Right Arc
             arc.X = rect.Right - diameter;
             path.AddArc(arc, 270, 90);
+
+            // Bottom-Right Arc
             arc.Y = rect.Bottom - diameter;
             path.AddArc(arc, 0, 90);
+
+            // Bottom-Left Arc
             arc.X = rect.Left;
             path.AddArc(arc, 90, 90);
+
             path.CloseFigure();
             return path;
         }
+
+        public static GraphicsPath CreateRoundedPath(Rectangle rect, int radius) =>
+            CreateRoundedPath(new RectangleF(rect.X, rect.Y, rect.Width, rect.Height), radius);
     }
     #endregion
 
@@ -122,9 +139,10 @@ namespace XeroxGo.PrinterAgent.UI
             {
                 var g = e.Graphics;
                 g.SmoothingMode = SmoothingMode.AntiAlias;
+                g.PixelOffsetMode = PixelOffsetMode.HighQuality;
 
-                var rect = new Rectangle(4, 2, e.Item.Width - 8, e.Item.Height - 4);
-                using var path = FluentTheme.CreateRoundedPath(rect, 4);
+                var rect = new RectangleF(4.5f, 2.5f, e.Item.Width - 9f, e.Item.Height - 5f);
+                using var path = FluentTheme.CreateRoundedPath(rect, 4f);
 
                 using var brush = new SolidBrush(Color.FromArgb(241, 245, 249)); // Slate 100
                 g.FillPath(brush, path);
@@ -162,6 +180,7 @@ namespace XeroxGo.PrinterAgent.UI
 
     /// <summary>
     /// Clean card container with 8px rounded corners and 1px border.
+    /// Anti-aliased with zero outer-corner halo.
     /// </summary>
     public class FluentCard : Panel
     {
@@ -177,24 +196,34 @@ namespace XeroxGo.PrinterAgent.UI
 
         protected override void OnPaint(PaintEventArgs e)
         {
-            base.OnPaint(e);
-            e.Graphics.SmoothingMode = SmoothingMode.AntiAlias;
-            e.Graphics.PixelOffsetMode = PixelOffsetMode.HighQuality;
+            var g = e.Graphics;
+            g.SmoothingMode = SmoothingMode.AntiAlias;
+            g.PixelOffsetMode = PixelOffsetMode.HighQuality;
 
-            var rect = new Rectangle(0, 0, Width - 1, Height - 1);
-            using var path = FluentTheme.CreateRoundedPath(rect, CornerRadius);
+            // 1. Clear with parent background so corners blend smoothly
+            if (Parent != null)
+            {
+                using var parentBrush = new SolidBrush(Parent.BackColor);
+                g.FillRectangle(parentBrush, ClientRectangle);
+            }
 
+            // 2. Fill rounded card background
+            var fillRect = new RectangleF(0, 0, Width, Height);
+            using var fillPath = FluentTheme.CreateRoundedPath(fillRect, CornerRadius);
             using var bgBrush = new SolidBrush(BackColor);
-            e.Graphics.FillPath(bgBrush, path);
+            g.FillPath(bgBrush, fillPath);
 
+            // 3. Crisp, non-clipped 1px border
+            var strokeRect = new RectangleF(0.5f, 0.5f, Width - 1f, Height - 1f);
+            using var strokePath = FluentTheme.CreateRoundedPath(strokeRect, CornerRadius - 0.5f);
             using var borderPen = new Pen(BorderColor, 1f);
-            e.Graphics.DrawPath(borderPen, path);
+            g.DrawPath(borderPen, strokePath);
         }
     }
 
     /// <summary>
     /// Modern Windows 11 text input container with flat 1px border and focus ring.
-    /// Eliminates legacy 3D sunken borders.
+    /// Perfectly centered text baseline with 10px horizontal padding.
     /// </summary>
     public class FluentTextBox : Panel
     {
@@ -235,10 +264,10 @@ namespace XeroxGo.PrinterAgent.UI
                 Font = FluentTheme.Font(9.5f),
                 ForeColor = FluentTheme.TextPrimary,
                 BackColor = Color.White,
-                Location = new Point(10, 7),
-                Width = Width - 20,
                 Anchor = AnchorStyles.Left | AnchorStyles.Right | AnchorStyles.Top
             };
+
+            UpdateInnerTextBoxLayout();
 
             _textBox.GotFocus += (s, e) => { _isFocused = true; Invalidate(); };
             _textBox.LostFocus += (s, e) => { _isFocused = false; Invalidate(); };
@@ -249,16 +278,21 @@ namespace XeroxGo.PrinterAgent.UI
             Click += (s, e) => _textBox.Focus();
         }
 
+        private void UpdateInnerTextBoxLayout()
+        {
+            if (_textBox == null) return;
+            int padX = 10;
+            _textBox.Width = Math.Max(10, Width - (padX * 2));
+            int tbY = Math.Max(0, (Height - _textBox.PreferredHeight) / 2);
+            _textBox.Location = new Point(padX, tbY);
+        }
+
         protected override void OnMouseEnter(EventArgs e) { _isHovered = true; Invalidate(); base.OnMouseEnter(e); }
         protected override void OnMouseLeave(EventArgs e) { _isHovered = false; Invalidate(); base.OnMouseLeave(e); }
         protected override void OnResize(EventArgs eventargs)
         {
             base.OnResize(eventargs);
-            if (_textBox != null)
-            {
-                _textBox.Width = Math.Max(10, Width - 20);
-                _textBox.Location = new Point(10, (Height - _textBox.PreferredHeight) / 2);
-            }
+            UpdateInnerTextBoxLayout();
         }
 
         protected override void OnPaint(PaintEventArgs e)
@@ -267,30 +301,50 @@ namespace XeroxGo.PrinterAgent.UI
             g.SmoothingMode = SmoothingMode.AntiAlias;
             g.PixelOffsetMode = PixelOffsetMode.HighQuality;
 
-            var rect = new Rectangle(0, 0, Width - 1, Height - 1);
-            using var path = FluentTheme.CreateRoundedPath(rect, 4);
+            if (Parent != null)
+            {
+                using var parentBrush = new SolidBrush(Parent.BackColor);
+                g.FillRectangle(parentBrush, ClientRectangle);
+            }
 
+            var fillRect = new RectangleF(0, 0, Width, Height);
+            using var fillPath = FluentTheme.CreateRoundedPath(fillRect, 4f);
             using var bgBrush = new SolidBrush(BackColor);
-            g.FillPath(bgBrush, path);
+            g.FillPath(bgBrush, fillPath);
 
             Color borderColor = _isFocused
                 ? FluentTheme.InputBorderFocused
                 : (_isHovered ? FluentTheme.InputBorderHover : FluentTheme.InputBorder);
 
-            float borderWidth = _isFocused ? 1.5f : 1f;
-            using var borderPen = new Pen(borderColor, borderWidth);
-            g.DrawPath(borderPen, path);
+            var strokeRect = new RectangleF(0.5f, 0.5f, Width - 1f, Height - 1f);
+            using var strokePath = FluentTheme.CreateRoundedPath(strokeRect, 3.5f);
+            using var borderPen = new Pen(borderColor, 1f);
+            g.DrawPath(borderPen, strokePath);
+
+            // Windows 11 Fluent 2 bottom accent highlight when focused
+            if (_isFocused)
+            {
+                using var focusPen = new Pen(FluentTheme.Accent, 2f);
+                float r = 3.5f;
+                float d = r * 2f;
+                using var bottomPath = new GraphicsPath();
+                bottomPath.AddArc(0.5f, Height - 1f - d, d, d, 90, 45);
+                bottomPath.AddLine(0.5f + r, Height - 1f, Width - 1f - r, Height - 1f);
+                bottomPath.AddArc(Width - 1f - d, Height - 1f - d, d, d, 45, 45);
+                g.DrawPath(focusPen, bottomPath);
+            }
         }
 
         public new bool Focus() => _textBox.Focus();
     }
 
     /// <summary>
-    /// Modern Windows 11 button with crisp 4px corner radius and stateful hover/press rendering.
+    /// Modern Windows 11 button with crisp 4px corner radius, vector icons, and stateful hover/press rendering.
     /// </summary>
     public class FluentButton : Button
     {
         public bool IsPrimary { get; set; } = false;
+        public bool HasPrinterIcon { get; set; } = false;
         public int CornerRadius { get; set; } = 4;
         private bool _isHovered = false;
         private bool _isPressed = false;
@@ -316,15 +370,14 @@ namespace XeroxGo.PrinterAgent.UI
             g.SmoothingMode = SmoothingMode.AntiAlias;
             g.PixelOffsetMode = PixelOffsetMode.HighQuality;
 
-            // Clear parent background smoothly
             if (Parent != null)
             {
                 using var parentBrush = new SolidBrush(Parent.BackColor);
                 g.FillRectangle(parentBrush, ClientRectangle);
             }
 
-            var rect = new Rectangle(0, 0, Width - 1, Height - 1);
-            using var path = FluentTheme.CreateRoundedPath(rect, CornerRadius);
+            var fillRect = new RectangleF(0, 0, Width, Height);
+            using var fillPath = FluentTheme.CreateRoundedPath(fillRect, CornerRadius);
 
             Color bgColor;
             Color textColor;
@@ -334,38 +387,253 @@ namespace XeroxGo.PrinterAgent.UI
             {
                 bgColor = _isPressed ? FluentTheme.AccentPressed : (_isHovered ? FluentTheme.AccentHover : FluentTheme.Accent);
                 textColor = Color.White;
-                borderColor = bgColor;
+                borderColor = _isPressed ? Color.FromArgb(0, 65, 125) : Color.FromArgb(0, 90, 168);
             }
             else
             {
-                bgColor = _isPressed ? Color.FromArgb(226, 232, 240) : (_isHovered ? Color.FromArgb(241, 245, 249) : Color.White);
+                bgColor = _isPressed ? Color.FromArgb(226, 232, 240) : (_isHovered ? Color.FromArgb(248, 250, 252) : Color.White);
                 textColor = FluentTheme.TextPrimary;
                 borderColor = _isHovered ? FluentTheme.InputBorderHover : FluentTheme.CardBorder;
             }
 
             using (var brush = new SolidBrush(bgColor))
             {
-                g.FillPath(brush, path);
+                g.FillPath(brush, fillPath);
             }
 
+            var strokeRect = new RectangleF(0.5f, 0.5f, Width - 1f, Height - 1f);
+            using var strokePath = FluentTheme.CreateRoundedPath(strokeRect, CornerRadius - 0.5f);
             using (var pen = new Pen(borderColor, 1f))
             {
-                g.DrawPath(pen, path);
+                g.DrawPath(pen, strokePath);
             }
 
+            // Optional vector printer icon for crisp baseline alignment (no emoji font fallback jitter)
+            int textStartX = 0;
+            if (HasPrinterIcon)
+            {
+                int iconSize = 14;
+                int iconX = 14;
+                int iconY = (Height - iconSize) / 2;
+                DrawVectorPrinterIcon(g, iconX, iconY, textColor);
+                textStartX = iconX + iconSize + 6;
+            }
+
+            var textRect = textStartX > 0
+                ? new Rectangle(textStartX, 0, Width - textStartX - 8, Height)
+                : new Rectangle(0, 0, Width, Height);
+
+            var textFormat = textStartX > 0
+                ? (TextFormatFlags.Left | TextFormatFlags.VerticalCenter | TextFormatFlags.SingleLine | TextFormatFlags.NoPrefix)
+                : (TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter | TextFormatFlags.SingleLine | TextFormatFlags.NoPrefix);
+
+            TextRenderer.DrawText(g, Text, Font, textRect, textColor, textFormat);
+
+            // Subtle focus indicator
+            if (Focused && ShowFocusCues)
+            {
+                using var focusPen = new Pen(FluentTheme.Accent, 1f) { DashStyle = DashStyle.Dot };
+                var focusRect = new RectangleF(2.5f, 2.5f, Width - 5f, Height - 5f);
+                using var focusPath = FluentTheme.CreateRoundedPath(focusRect, Math.Max(1, CornerRadius - 2));
+                g.DrawPath(focusPen, focusPath);
+            }
+        }
+
+        private static void DrawVectorPrinterIcon(Graphics g, int x, int y, Color color)
+        {
+            using var pen = new Pen(color, 1.3f) { StartCap = LineCap.Round, EndCap = LineCap.Round };
+            using var brush = new SolidBrush(color);
+
+            // Paper Tray (Top)
+            g.DrawRectangle(pen, x + 3, y + 1, 8, 3);
+
+            // Printer Body (Middle)
+            g.DrawRectangle(pen, x, y + 4, 14, 6);
+
+            // Paper Output (Bottom)
+            g.FillRectangle(brush, x + 3, y + 8, 8, 4);
+            using var innerPen = new Pen(Color.FromArgb(200, color), 1f);
+            g.DrawLine(innerPen, x + 4, y + 10, x + 10, y + 10);
+        }
+    }
+
+    /// <summary>
+    /// Modern Windows 11 ComboBox with 32px height, 4px rounded borders, and a sleek chevron arrow.
+    /// Eliminates legacy Windows 7 3D beveled borders.
+    /// </summary>
+    public class FluentComboBox : ComboBox
+    {
+        private bool _isHovered = false;
+        private bool _isFocused = false;
+
+        public FluentComboBox()
+        {
+            SetStyle(ControlStyles.OptimizedDoubleBuffer, true);
+            DrawMode = DrawMode.OwnerDrawFixed;
+            DropDownStyle = ComboBoxStyle.DropDownList;
+            ItemHeight = 24;
+            Font = FluentTheme.Font(9.5f);
+            BackColor = Color.White;
+            ForeColor = FluentTheme.TextPrimary;
+            FlatStyle = FlatStyle.Flat;
+            Cursor = Cursors.Hand;
+        }
+
+        protected override void OnMouseEnter(EventArgs e) { _isHovered = true; Invalidate(); base.OnMouseEnter(e); }
+        protected override void OnMouseLeave(EventArgs e) { _isHovered = false; Invalidate(); base.OnMouseLeave(e); }
+        protected override void OnGotFocus(EventArgs e) { _isFocused = true; Invalidate(); base.OnGotFocus(e); }
+        protected override void OnLostFocus(EventArgs e) { _isFocused = false; Invalidate(); base.OnLostFocus(e); }
+
+        protected override void OnDrawItem(DrawItemEventArgs e)
+        {
+            if (e.Index < 0) return;
+
+            var g = e.Graphics;
+            bool isSelected = (e.State & DrawItemState.Selected) != 0;
+            Color itemBg = isSelected ? Color.FromArgb(241, 245, 249) : Color.White; // Slate 100 on hover
+            Color itemText = FluentTheme.TextPrimary;
+
+            using (var bgBrush = new SolidBrush(itemBg))
+            {
+                g.FillRectangle(bgBrush, e.Bounds);
+            }
+
+            string text = Items[e.Index]?.ToString() ?? "";
+            var textRect = new Rectangle(e.Bounds.X + 10, e.Bounds.Y, e.Bounds.Width - 10, e.Bounds.Height);
+            TextRenderer.DrawText(
+                g,
+                text,
+                Font,
+                textRect,
+                itemText,
+                TextFormatFlags.Left | TextFormatFlags.VerticalCenter | TextFormatFlags.SingleLine | TextFormatFlags.EndEllipsis
+            );
+        }
+
+        protected override void WndProc(ref Message m)
+        {
+            base.WndProc(ref m);
+
+            // WM_PAINT
+            if (m.Msg == 0x000F)
+            {
+                using var g = Graphics.FromHwnd(Handle);
+                g.SmoothingMode = SmoothingMode.AntiAlias;
+                g.PixelOffsetMode = PixelOffsetMode.HighQuality;
+
+                // 1. Paint clean right-hand chevron area
+                int btnWidth = 28;
+                var btnRect = new Rectangle(Width - btnWidth, 1, btnWidth - 1, Height - 2);
+                using (var bgBrush = new SolidBrush(BackColor))
+                {
+                    g.FillRectangle(bgBrush, btnRect);
+                }
+
+                // 2. Windows 11 Modern Chevron Down Arrow
+                float midX = Width - 14.5f;
+                float midY = Height / 2f;
+                Color arrowColor = _isFocused ? FluentTheme.Accent : (_isHovered ? FluentTheme.TextPrimary : FluentTheme.TextSecondary);
+
+                using (var arrowPen = new Pen(arrowColor, 1.4f) { StartCap = LineCap.Round, EndCap = LineCap.Round })
+                {
+                    g.DrawLine(arrowPen, midX - 3.5f, midY - 1.5f, midX, midY + 2f);
+                    g.DrawLine(arrowPen, midX, midY + 2f, midX + 3.5f, midY - 1.5f);
+                }
+
+                // 3. Crisp 1px rounded border
+                Color borderColor = _isFocused
+                    ? FluentTheme.InputBorderFocused
+                    : (_isHovered ? FluentTheme.InputBorderHover : FluentTheme.InputBorder);
+
+                var strokeRect = new RectangleF(0.5f, 0.5f, Width - 1f, Height - 1f);
+                using var strokePath = FluentTheme.CreateRoundedPath(strokeRect, 3.5f);
+                using var borderPen = new Pen(borderColor, 1f);
+                g.DrawPath(borderPen, strokePath);
+            }
+        }
+    }
+
+    /// <summary>
+    /// Modern Windows 11 CheckBox with 4px rounded box, smooth hover, and accent checkmark.
+    /// Eliminates legacy Win32 gray beveled checkboxes.
+    /// </summary>
+    public class FluentCheckBox : CheckBox
+    {
+        private bool _isHovered = false;
+
+        public FluentCheckBox()
+        {
+            SetStyle(ControlStyles.AllPaintingInWmPaint | ControlStyles.UserPaint | ControlStyles.OptimizedDoubleBuffer, true);
+            Cursor = Cursors.Hand;
+            Font = FluentTheme.Font(9f);
+            ForeColor = FluentTheme.TextPrimary;
+            Height = 24;
+        }
+
+        protected override void OnMouseEnter(EventArgs e) { _isHovered = true; Invalidate(); base.OnMouseEnter(e); }
+        protected override void OnMouseLeave(EventArgs e) { _isHovered = false; Invalidate(); base.OnMouseLeave(e); }
+        protected override void OnCheckedChanged(EventArgs e) { Invalidate(); base.OnCheckedChanged(e); }
+
+        protected override void OnPaint(PaintEventArgs pevent)
+        {
+            var g = pevent.Graphics;
+            g.SmoothingMode = SmoothingMode.AntiAlias;
+            g.PixelOffsetMode = PixelOffsetMode.HighQuality;
+
+            if (Parent != null)
+            {
+                using var parentBrush = new SolidBrush(Parent.BackColor);
+                g.FillRectangle(parentBrush, ClientRectangle);
+            }
+
+            // Checkbox glyph box (18x18, 4px corner radius)
+            float boxSize = 18f;
+            float boxY = (Height - boxSize) / 2f;
+            var boxRect = new RectangleF(0.5f, boxY, boxSize, boxSize);
+
+            if (Checked)
+            {
+                Color bg = _isHovered ? FluentTheme.AccentHover : FluentTheme.Accent;
+                using var fillPath = FluentTheme.CreateRoundedPath(boxRect, 4f);
+                using var brush = new SolidBrush(bg);
+                g.FillPath(brush, fillPath);
+
+                // Crisp White Checkmark Vector
+                using var checkPen = new Pen(Color.White, 1.8f) { StartCap = LineCap.Round, EndCap = LineCap.Round };
+                g.DrawLine(checkPen, 4.5f, boxY + 9f, 7.5f, boxY + 12.5f);
+                g.DrawLine(checkPen, 7.5f, boxY + 12.5f, 13.5f, boxY + 5.5f);
+            }
+            else
+            {
+                Color bg = Color.White;
+                Color border = _isHovered ? FluentTheme.InputBorderHover : FluentTheme.InputBorder;
+
+                using var fillPath = FluentTheme.CreateRoundedPath(boxRect, 4f);
+                using var bgBrush = new SolidBrush(bg);
+                g.FillPath(bgBrush, fillPath);
+
+                var strokeRect = new RectangleF(0.5f, boxY, boxSize, boxSize);
+                using var strokePath = FluentTheme.CreateRoundedPath(strokeRect, 3.5f);
+                using var borderPen = new Pen(border, 1f);
+                g.DrawPath(borderPen, strokePath);
+            }
+
+            // Label text aligned to font baseline
+            var textRect = new Rectangle(26, 0, Width - 26, Height);
             TextRenderer.DrawText(
                 g,
                 Text,
                 Font,
-                rect,
-                textColor,
-                TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter | TextFormatFlags.SingleLine
+                textRect,
+                ForeColor,
+                TextFormatFlags.Left | TextFormatFlags.VerticalCenter | TextFormatFlags.SingleLine
             );
         }
     }
 
     /// <summary>
     /// Executive-grade auto-sizing status capsule with state-tinted background and pulse dot.
+    /// Perfectly centered text and dot baseline with zero capsule distortion.
     /// </summary>
     public class FluentStatusBadge : Control
     {
@@ -416,10 +684,9 @@ namespace XeroxGo.PrinterAgent.UI
                     break;
             }
 
-            // Auto-size width to accommodate text comfortably
             using var g = CreateGraphics();
             var textSize = TextRenderer.MeasureText(g, _statusText, Font);
-            int newWidth = Math.Max(120, textSize.Width + 34);
+            int newWidth = Math.Max(120, textSize.Width + 38);
 
             if (Width != newWidth)
             {
@@ -440,25 +707,33 @@ namespace XeroxGo.PrinterAgent.UI
             g.SmoothingMode = SmoothingMode.AntiAlias;
             g.PixelOffsetMode = PixelOffsetMode.HighQuality;
 
-            var rect = new Rectangle(0, 0, Width - 1, Height - 1);
-            using var path = FluentTheme.CreateRoundedPath(rect, Height / 2);
+            if (Parent != null)
+            {
+                using var parentBrush = new SolidBrush(Parent.BackColor);
+                g.FillRectangle(parentBrush, ClientRectangle);
+            }
 
-            // Tinted pill background
+            float radius = (Height - 1) / 2f;
+            var fillRect = new RectangleF(0, 0, Width, Height);
+            using var path = FluentTheme.CreateRoundedPath(fillRect, radius);
+
             using var bgBrush = new SolidBrush(_badgeBg);
             g.FillPath(bgBrush, path);
 
-            // Subtle border
+            var strokeRect = new RectangleF(0.5f, 0.5f, Width - 1f, Height - 1f);
+            using var strokePath = FluentTheme.CreateRoundedPath(strokeRect, radius - 0.5f);
             using var borderPen = new Pen(_badgeBorder, 1f);
-            g.DrawPath(borderPen, path);
+            g.DrawPath(borderPen, strokePath);
 
-            // Status Indicator Dot
-            int dotSize = 7;
-            int dotY = (Height - dotSize) / 2;
+            // Centered dot
+            float dotSize = 7.0f;
+            float dotX = 12f;
+            float dotY = (Height - dotSize) / 2.0f;
             using var dotBrush = new SolidBrush(_dotColor);
-            g.FillEllipse(dotBrush, 10, dotY, dotSize, dotSize);
+            g.FillEllipse(dotBrush, dotX, dotY, dotSize, dotSize);
 
             // Status Text
-            var textRect = new Rectangle(22, 0, Width - 30, Height);
+            var textRect = new Rectangle(26, 0, Width - 36, Height);
             TextRenderer.DrawText(
                 g,
                 _statusText,

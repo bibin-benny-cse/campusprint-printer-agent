@@ -21,11 +21,11 @@ namespace XeroxGo.PrinterAgent.UI
         private FluentButton _btnToggleKey = null!;
         private bool _isKeyRevealed = false;
 
-        private ComboBox _cmbLogicalSlot = null!;
-        private ComboBox _cmbPhysicalPrinters = null!;
+        private FluentComboBox _cmbLogicalSlot = null!;
+        private FluentComboBox _cmbPhysicalPrinters = null!;
 
-        private ComboBox _cmbPollInterval = null!;
-        private CheckBox _chkAutoStart = null!;
+        private FluentComboBox _cmbPollInterval = null!;
+        private FluentCheckBox _chkAutoStart = null!;
 
         private FluentStatusBadge _statusBadge = null!;
         private FluentButton _btnTestSlip = null!;
@@ -89,18 +89,41 @@ namespace XeroxGo.PrinterAgent.UI
                 g.SmoothingMode = SmoothingMode.AntiAlias;
                 g.PixelOffsetMode = PixelOffsetMode.HighQuality;
 
-                var rect = new Rectangle(0, 0, 39, 39);
-                using var path = FluentTheme.CreateRoundedPath(rect, 8);
-                using var brush = new LinearGradientBrush(rect, Color.FromArgb(0, 103, 192), Color.FromArgb(37, 99, 235), 90);
+                var fillRect = new RectangleF(0, 0, 40, 40);
+                using var path = FluentTheme.CreateRoundedPath(fillRect, 8f);
+                using var brush = new LinearGradientBrush(fillRect, Color.FromArgb(0, 103, 192), Color.FromArgb(37, 99, 235), 90);
                 g.FillPath(brush, path);
 
-                // Clean White Printer Glyph
+                // Inset subtle glass border
+                var strokeRect = new RectangleF(0.5f, 0.5f, 39, 39);
+                using var strokePath = FluentTheme.CreateRoundedPath(strokeRect, 7.5f);
+                using var borderPen = new Pen(Color.FromArgb(40, 255, 255, 255), 1f);
+                g.DrawPath(borderPen, strokePath);
+
+                // Crisp vector printer glyph
                 using var whiteBrush = new SolidBrush(Color.White);
-                using var whitePen = new Pen(Color.White, 1.8f);
-                g.FillRectangle(whiteBrush, 10, 18, 20, 12);
-                g.DrawRectangle(whitePen, 13, 10, 14, 7);
+                using var whitePen = new Pen(Color.White, 1.4f) { StartCap = LineCap.Round, EndCap = LineCap.Round };
+
+                // 1. Paper input tray (top)
+                g.DrawRectangle(whitePen, 13, 9, 14, 6);
+
+                // 2. Main printer chassis (middle)
+                var bodyRect = new RectangleF(9, 15, 22, 13);
+                using var bodyPath = FluentTheme.CreateRoundedPath(bodyRect, 2f);
+                g.FillPath(whiteBrush, bodyPath);
+
+                // 3. Status LED dot
+                using var ledBrush = new SolidBrush(Color.FromArgb(16, 185, 129));
+                g.FillEllipse(ledBrush, 12, 18, 2.5f, 2.5f);
+
+                // 4. Paper output slot & sheet
                 using var blueBrush = new SolidBrush(Color.FromArgb(0, 103, 192));
-                g.FillRectangle(blueBrush, 13, 24, 14, 2);
+                g.FillRectangle(blueBrush, 13, 21, 14, 2);
+
+                using var paperBrush = new SolidBrush(Color.FromArgb(241, 245, 249));
+                g.FillRectangle(paperBrush, 13, 23, 14, 4);
+                using var linePen = new Pen(Color.FromArgb(148, 163, 184), 1f);
+                g.DrawLine(linePen, 15, 25, 23, 25);
             };
             _headerPanel.Controls.Add(logoBox);
 
@@ -118,7 +141,7 @@ namespace XeroxGo.PrinterAgent.UI
                 Text = "CampusPrint Kiosk Counter Spooler Daemon",
                 Font = FluentTheme.Font(8.5f),
                 ForeColor = FluentTheme.TextSecondary,
-                Location = new Point(49, 26),
+                Location = new Point(48, 26),
                 AutoSize = true
             };
             _headerPanel.Controls.Add(lblTitle);
@@ -230,14 +253,11 @@ namespace XeroxGo.PrinterAgent.UI
             };
             cardHardware.Controls.Add(lblSlot);
 
-            _cmbLogicalSlot = new ComboBox
+            _cmbLogicalSlot = new FluentComboBox
             {
                 Location = new Point(18, 60),
-                Size = new Size(contentWidth - 36, 30),
-                DropDownStyle = ComboBoxStyle.DropDown,
-                Font = FluentTheme.Font(9.5f),
-                BackColor = Color.White,
-                ForeColor = FluentTheme.TextPrimary
+                Size = new Size(contentWidth - 36, 32),
+                DropDownStyle = ComboBoxStyle.DropDownList
             };
             _cmbLogicalSlot.Items.AddRange(new object[] { "Primary", "Secondary", "Counter 1", "Counter 2", "Color Station", "BW Station" });
             cardHardware.Controls.Add(_cmbLogicalSlot);
@@ -252,14 +272,11 @@ namespace XeroxGo.PrinterAgent.UI
             };
             cardHardware.Controls.Add(lblPhysical);
 
-            _cmbPhysicalPrinters = new ComboBox
+            _cmbPhysicalPrinters = new FluentComboBox
             {
                 Location = new Point(18, 122),
-                Size = new Size(contentWidth - 36, 30),
-                DropDownStyle = ComboBoxStyle.DropDownList,
-                Font = FluentTheme.Font(9.5f),
-                BackColor = Color.White,
-                ForeColor = FluentTheme.TextPrimary
+                Size = new Size(contentWidth - 36, 32),
+                DropDownStyle = ComboBoxStyle.DropDownList
             };
             cardHardware.Controls.Add(_cmbPhysicalPrinters);
 
@@ -272,7 +289,7 @@ namespace XeroxGo.PrinterAgent.UI
             var cardSystem = new FluentCard
             {
                 Location = new Point(marginX, currentY),
-                Size = new Size(contentWidth, 134)
+                Size = new Size(contentWidth, 144)
             };
 
             var lblSysHeader = new Label
@@ -290,19 +307,16 @@ namespace XeroxGo.PrinterAgent.UI
                 Text = "Queue Poll Interval",
                 Font = FluentTheme.Font(9f),
                 ForeColor = FluentTheme.TextSecondary,
-                Location = new Point(18, 38),
+                Location = new Point(18, 40),
                 AutoSize = true
             };
             cardSystem.Controls.Add(lblPoll);
 
-            _cmbPollInterval = new ComboBox
+            _cmbPollInterval = new FluentComboBox
             {
-                Location = new Point(18, 58),
-                Size = new Size(contentWidth - 36, 30),
-                DropDownStyle = ComboBoxStyle.DropDownList,
-                Font = FluentTheme.Font(9.5f),
-                BackColor = Color.White,
-                ForeColor = FluentTheme.TextPrimary
+                Location = new Point(18, 60),
+                Size = new Size(contentWidth - 36, 32),
+                DropDownStyle = ComboBoxStyle.DropDownList
             };
             _cmbPollInterval.Items.AddRange(new object[]
             {
@@ -315,19 +329,17 @@ namespace XeroxGo.PrinterAgent.UI
             });
             cardSystem.Controls.Add(_cmbPollInterval);
 
-            _chkAutoStart = new CheckBox
+            _chkAutoStart = new FluentCheckBox
             {
                 Text = "Launch XeroxGo Agent automatically on Windows startup",
                 Font = FluentTheme.Font(9f),
-                Location = new Point(18, 96),
-                Size = new Size(contentWidth - 36, 24),
-                ForeColor = FluentTheme.TextPrimary,
-                Cursor = Cursors.Hand
+                Location = new Point(18, 104),
+                Size = new Size(contentWidth - 36, 24)
             };
             cardSystem.Controls.Add(_chkAutoStart);
 
             Controls.Add(cardSystem);
-            currentY += 148;
+            currentY += 156;
 
             // ==========================================
             // 5. Footer Action Bar
@@ -341,9 +353,10 @@ namespace XeroxGo.PrinterAgent.UI
 
             _btnTestSlip = new FluentButton
             {
-                Text = "🖨️  Print Test Slip",
+                Text = "Print Test Slip",
+                HasPrinterIcon = true,
                 Location = new Point(0, 0),
-                Size = new Size(145, 34),
+                Size = new Size(148, 34),
                 IsPrimary = false
             };
             _btnTestSlip.Click += OnPrintTestSlip;
@@ -378,7 +391,18 @@ namespace XeroxGo.PrinterAgent.UI
         {
             _txtApiUrl.Text = _config.ApiUrl;
             _txtApiKey.Text = _config.AgentApiKey;
-            _cmbLogicalSlot.Text = _config.LogicalPrinterName;
+
+            // Logical Slot selection
+            string slot = string.IsNullOrWhiteSpace(_config.LogicalPrinterName) ? "Primary" : _config.LogicalPrinterName;
+            if (!_cmbLogicalSlot.Items.Contains(slot))
+            {
+                _cmbLogicalSlot.Items.Add(slot);
+            }
+            _cmbLogicalSlot.SelectedItem = slot;
+            if (_cmbLogicalSlot.SelectedIndex < 0 && _cmbLogicalSlot.Items.Count > 0)
+            {
+                _cmbLogicalSlot.SelectedIndex = 0;
+            }
 
             // Populate installed physical printers
             _cmbPhysicalPrinters.Items.Clear();
@@ -461,7 +485,7 @@ namespace XeroxGo.PrinterAgent.UI
 
             _config.ApiUrl = url;
             _config.AgentApiKey = _txtApiKey.Text.Trim();
-            _config.LogicalPrinterName = string.IsNullOrWhiteSpace(_cmbLogicalSlot.Text) ? "Primary" : _cmbLogicalSlot.Text.Trim();
+            _config.LogicalPrinterName = _cmbLogicalSlot.SelectedItem?.ToString() ?? "Primary";
 
             string physicalSelection = _cmbPhysicalPrinters.SelectedItem?.ToString() ?? "Auto";
             _config.PhysicalPrinterName = physicalSelection.StartsWith("Auto", StringComparison.OrdinalIgnoreCase) ? "Auto" : physicalSelection;
