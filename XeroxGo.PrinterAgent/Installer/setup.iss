@@ -34,7 +34,6 @@ Name: "autostart"; Description: "Launch XeroxGo Agent automatically on Windows s
 
 [Files]
 Source: "..\bin\Release\net8.0-windows\win-x64\publish\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
-Source: "uninstall.ps1"; DestDir: "{app}"; Flags: ignoreversion
 
 [Icons]
 Name: "{autoprograms}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"
@@ -46,3 +45,41 @@ Root: HKCU; Subkey: "Software\Microsoft\Windows\CurrentVersion\Run"; ValueType: 
 
 [Run]
 Filename: "{app}\{#MyAppExeName}"; Description: "{cm:LaunchProgram,{#StringChange(MyAppName, '&', '&&')}}"; Flags: nowait postinstall skipifsilent
+
+[UninstallDelete]
+; Clean up local user config and temp logs automatically on uninstall
+Type: filesandordirs; Name: "{localappdata}\XeroxGo"
+
+[Code]
+// Terminate running agent process before install or uninstall
+function KillAgentProcess(): Boolean;
+var
+  ResultCode: Integer;
+begin
+  Exec(ExpandConstant('{sys}\taskkill.exe'), '/F /IM {#MyAppExeName} /T', '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
+  Result := True;
+end;
+
+function InitializeSetup(): Boolean;
+begin
+  KillAgentProcess();
+  Result := True;
+end;
+
+function InitializeUninstall(): Boolean;
+begin
+  KillAgentProcess();
+  Result := True;
+end;
+
+procedure CurUninstallStepChanged(CurUninstallStep: TUninstallStep);
+var
+  ResultCode: Integer;
+begin
+  if CurUninstallStep = usPostUninstall then
+  begin
+    // Remove self-signed publisher certificate from CurrentUser trust stores
+    Exec(ExpandConstant('{sys}\certutil.exe'), '-user -delstore "TrustedPublisher" "{#MyAppPublisher}"', '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
+    Exec(ExpandConstant('{sys}\certutil.exe'), '-user -delstore "Root" "{#MyAppPublisher}"', '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
+  end;
+end;
