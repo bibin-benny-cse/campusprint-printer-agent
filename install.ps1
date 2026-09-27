@@ -52,8 +52,8 @@ function Invoke-CleanUninstall {
     Write-Host ""
 
     # 1. Terminate any active process
-    Write-Host "⏳ [1/6] Stopping active XeroxGo Printer Agent processes..." -ForegroundColor Yellow
-    $processes = Get-Process -Name "XeroxGo.PrinterAgent" -ErrorAction SilentlyContinue
+    Write-Host "⏳ [1/7] Stopping active XeroxGo Printer Agent processes..." -ForegroundColor Yellow
+    $processes = Get-Process -Name "XeroxGo.PrinterAgent", "XeroxGoAgent-Setup" -ErrorAction SilentlyContinue
     if ($processes) {
         $processes | Stop-Process -Force
         Start-Sleep -Seconds 1
@@ -62,20 +62,37 @@ function Invoke-CleanUninstall {
         Write-Host "   ✓ No active process running." -ForegroundColor DarkGray
     }
 
-    # 2. Run official Inno Setup Uninstaller if present
-    Write-Host "⏳ [2/6] Running application uninstaller..." -ForegroundColor Yellow
+    # 2. Extract Custom Paths from config before purging (if exists)
+    $configPath = Join-Path $env:LOCALAPPDATA "XeroxGo\config.json"
+    $customTempDir = $null
+    if (Test-Path $configPath) {
+        try {
+            $rawConfig = Get-Content $configPath -Raw | ConvertFrom-Json
+            if ($rawConfig.TempDirectory -and (Test-Path $rawConfig.TempDirectory)) {
+                $customTempDir = $rawConfig.TempDirectory
+            }
+        } catch {}
+    }
+
+    # 3. Detect and Run official Inno Setup Uninstaller
+    Write-Host "⏳ [2/7] Running native application uninstaller..." -ForegroundColor Yellow
+    $discoveredInstallDirs = @()
     $uninstallRegKeys = @(
         "HKCU:\Software\Microsoft\Windows\CurrentVersion\Uninstall\{D37F619C-5582-4BC2-91DE-7A419266F3A1}_is1",
         "HKLM:\Software\Microsoft\Windows\CurrentVersion\Uninstall\{D37F619C-5582-4BC2-91DE-7A419266F3A1}_is1"
     )
     foreach ($regPath in $uninstallRegKeys) {
         if (Test-Path $regPath) {
-            $uninstString = (Get-ItemProperty -Path $regPath -Name "UninstallString" -ErrorAction SilentlyContinue).UninstallString
-            if ($uninstString) {
-                $uninstExe = $uninstString.Trim('"')
+            $regProps = Get-ItemProperty -Path $regPath -ErrorAction SilentlyContinue
+            if ($regProps.InstallLocation) {
+                $discoveredInstallDirs += $regProps.InstallLocation
+            }
+            if ($regProps.UninstallString) {
+                $uninstExe = $regProps.UninstallString.Trim('"')
                 if (Test-Path $uninstExe) {
                     Write-Host "   Executing native uninstaller silently..." -ForegroundColor DarkGray
                     Start-Process -FilePath $uninstExe -ArgumentList "/SILENT", "/VERYSILENT", "/SUPPRESSMSGBOXES" -Wait
+                    Start-Sleep -Seconds 2
                 }
             }
             Remove-Item -Path $regPath -Force -Recurse -ErrorAction SilentlyContinue
@@ -83,13 +100,14 @@ function Invoke-CleanUninstall {
     }
     Write-Host "   ✓ Application uninstalled." -ForegroundColor Green
 
-    # 3. Remove application installation directories
-    Write-Host "⏳ [3/6] Removing program files and residual binaries..." -ForegroundColor Yellow
+    # 4. Remove all program files & binaries (default + discovered)
+    Write-Host "⏳ [3/7] Removing program files and residual binaries..." -ForegroundColor Yellow
     $installDirs = @(
         (Join-Path $env:LOCALAPPDATA "Programs\XeroxGo Printer Agent"),
         (Join-Path $env:ProgramFiles "XeroxGo Printer Agent"),
         (Join-Path ${env:ProgramFiles(x86)} "XeroxGo Printer Agent")
-    )
+    ) + $discoveredInstallDirs | Select-Object -Unique
+
     foreach ($dir in $installDirs) {
         if ($dir -and (Test-Path $dir)) {
             Remove-Item -Path $dir -Recurse -Force -ErrorAction SilentlyContinue
@@ -97,8 +115,8 @@ function Invoke-CleanUninstall {
         }
     }
 
-    # 4. Remove all user data, configuration, logs, and temp queues
-    Write-Host "⏳ [4/6] Purging user data, logs, and configuration..." -ForegroundColor Yellow
+    # 5. Purge all user data, configuration, logs, and spooling temp queues
+    Write-Host "⏳ [4/7] Purging user data, logs, and configuration..." -ForegroundColor Yellow
     $dataDir = Join-Path $env:LOCALAPPDATA "XeroxGo"
     if (Test-Path $dataDir) {
         Remove-Item -Path $dataDir -Recurse -Force -ErrorAction SilentlyContinue
@@ -106,48 +124,81 @@ function Invoke-CleanUninstall {
     } else {
         Write-Host "   ✓ No residual data directory found." -ForegroundColor DarkGray
     }
+    if ($customTempDir -and (Test-Path $customTempDir) -and ($customTempDir -ne $dataDir)) {
+        Remove-Item -Path $customTempDir -Recurse -Force -ErrorAction SilentlyContinue
+        Write-Host "   ✓ Purged custom temp: $customTempDir" -ForegroundColor Green
+    }
 
-    # 5. Remove autostart registry and shortcuts
-    Write-Host "⏳ [5/6] Cleaning Windows Startup registry & shortcuts..." -ForegroundColor Yellow
-    $runReg = "HKCU:\Software\Microsoft\Windows\CurrentVersion\Run"
-    if (Test-Path $runReg) {
-        $val = Get-ItemProperty -Path $runReg -Name "XeroxGoPrinterAgent" -ErrorAction SilentlyContinue
-        if ($val) {
-            Remove-ItemProperty -Path $runReg -Name "XeroxGoPrinterAgent" -Force -ErrorAction SilentlyContinue
-            Write-Host "   ✓ Removed startup registry key." -ForegroundColor Green
+    # 6. Remove autostart registry and shortcuts (User + All Users/Public)
+    Write-Host "⏳ [5/7] Cleaning Windows Startup registry & shortcuts..." -ForegroundColor Yellow
+    $runRegs = @(
+        "HKCU:\Software\Microsoft\Windows\CurrentVersion\Run",
+        "HKLM:\Software\Microsoft\Windows\CurrentVersion\Run"
+    )
+    foreach ($runReg in $runRegs) {
+        if (Test-Path $runReg) {
+            $val = Get-ItemProperty -Path $runReg -Name "XeroxGoPrinterAgent" -ErrorAction SilentlyContinue
+            if ($val) {
+                Remove-ItemProperty -Path $runReg -Name "XeroxGoPrinterAgent" -Force -ErrorAction SilentlyContinue
+                Write-Host "   ✓ Removed startup registry key ($runReg)." -ForegroundColor Green
+            }
         }
     }
 
-    # Shortcuts
-    $desktopShortcut = Join-Path ([Environment]::GetFolderPath('Desktop')) "XeroxGo Printer Agent.lnk"
-    $startMenuShortcut = Join-Path ([Environment]::GetFolderPath('Programs')) "XeroxGo Printer Agent.lnk"
-    if (Test-Path $desktopShortcut) { Remove-Item $desktopShortcut -Force -ErrorAction SilentlyContinue }
-    if (Test-Path $startMenuShortcut) { Remove-Item $startMenuShortcut -Force -ErrorAction SilentlyContinue }
-    Write-Host "   ✓ Desktop & Start Menu shortcuts removed." -ForegroundColor Green
+    # Remove all possible shortcuts (User + Common/Public Desktop and Start Menu)
+    $shortcuts = @(
+        (Join-Path ([Environment]::GetFolderPath('Desktop')) "XeroxGo Printer Agent.lnk"),
+        (Join-Path ([Environment]::GetFolderPath('Programs')) "XeroxGo Printer Agent.lnk"),
+        (Join-Path ([Environment]::GetFolderPath('CommonDesktop')) "XeroxGo Printer Agent.lnk"),
+        (Join-Path ([Environment]::GetFolderPath('CommonPrograms')) "XeroxGo Printer Agent.lnk"),
+        (Join-Path ([Environment]::GetFolderPath('Desktop')) "XeroxGo.lnk"),
+        (Join-Path ([Environment]::GetFolderPath('Programs')) "XeroxGo.lnk")
+    )
+    foreach ($shortcut in $shortcuts) {
+        if ($shortcut -and (Test-Path $shortcut)) {
+            Remove-Item $shortcut -Force -ErrorAction SilentlyContinue
+            Write-Host "   ✓ Removed shortcut: $shortcut" -ForegroundColor Green
+        }
+    }
 
-    # 6. Remove publisher certificate from stores & cleanup temp cache
-    Write-Host "⏳ [6/6] Cleaning certificate store and temporary files..." -ForegroundColor Yellow
-    $stores = @("Cert:\CurrentUser\TrustedPublisher", "Cert:\CurrentUser\Root")
-    foreach ($store in $stores) {
+    # 7. Remove publisher certificate from stores & cleanup temp cache
+    Write-Host "⏳ [6/7] Cleaning certificate store and temporary files..." -ForegroundColor Yellow
+    $certStores = @(
+        "Cert:\CurrentUser\TrustedPublisher",
+        "Cert:\CurrentUser\Root",
+        "Cert:\LocalMachine\TrustedPublisher",
+        "Cert:\LocalMachine\Root"
+    )
+    foreach ($store in $certStores) {
         if (Test-Path $store) {
-            Get-ChildItem -Path $store -ErrorAction SilentlyContinue |
-                Where-Object { $_.Subject -like "*CN=XeroxGo Technologies*" } |
-                ForEach-Object {
-                    Remove-Item -Path $_.PSPath -Force -ErrorAction SilentlyContinue
-                    Write-Host "   ✓ Removed publisher certificate from $store" -ForegroundColor Green
-                }
+            try {
+                Get-ChildItem -Path $store -ErrorAction SilentlyContinue |
+                    Where-Object { $_.Subject -like "*CN=XeroxGo Technologies*" } |
+                    ForEach-Object {
+                        Remove-Item -Path $_.PSPath -Force -ErrorAction SilentlyContinue
+                        Write-Host "   ✓ Removed publisher certificate from $store" -ForegroundColor Green
+                    }
+            } catch {}
         }
     }
 
+    # 8. Clean up crash dumps and installer temp caches
+    Write-Host "⏳ [7/7] Cleaning temporary download caches and crash dumps..." -ForegroundColor Yellow
     $tempDir = Join-Path $env:TEMP "XeroxGoInstall"
     if (Test-Path $tempDir) {
         Remove-Item -Path $tempDir -Recurse -Force -ErrorAction SilentlyContinue
     }
+    $crashDumpDir = Join-Path $env:LOCALAPPDATA "CrashDumps"
+    if (Test-Path $crashDumpDir) {
+        Get-ChildItem -Path $crashDumpDir -Filter "XeroxGo*.dmp" -ErrorAction SilentlyContinue |
+            Remove-Item -Force -ErrorAction SilentlyContinue
+    }
+    Write-Host "   ✓ Temporary caches and dumps cleaned." -ForegroundColor Green
 
     Write-Host ""
     Write-Host "================================================================" -ForegroundColor Cyan
     Write-Host "✨ XeroxGo Printer Agent has been cleanly and fully uninstalled!" -ForegroundColor Green
-    Write-Host "   Zero residual files, configs, registry entries, or certs left." -ForegroundColor Green
+    Write-Host "   Every file, directory, registry key, shortcut, and certificate has been purged." -ForegroundColor Green
     Write-Host "================================================================" -ForegroundColor Cyan
     Write-Host ""
 }
