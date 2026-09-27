@@ -72,14 +72,4 @@ begin
   Result := True;
 end;
 
-procedure CurUninstallStepChanged(CurUninstallStep: TUninstallStep);
-var
-  ResultCode: Integer;
-begin
-  if CurUninstallStep = usPostUninstall then
-  begin
-    // Remove self-signed publisher certificate from CurrentUser trust stores
-    Exec(ExpandConstant('{sys}\certutil.exe'), '-user -delstore "TrustedPublisher" "{#MyAppPublisher}"', '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
-    Exec(ExpandConstant('{sys}\certutil.exe'), '-user -delstore "Root" "{#MyAppPublisher}"', '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
-  end;
-end;
+
