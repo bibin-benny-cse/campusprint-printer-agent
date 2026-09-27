@@ -1,6 +1,7 @@
 using System;
 using System.Drawing;
 using System.Drawing.Drawing2D;
+using System.Drawing.Text;
 using System.Windows.Forms;
 using XeroxGo.PrinterAgent.Models;
 using XeroxGo.PrinterAgent.Services;
@@ -15,6 +16,8 @@ namespace XeroxGo.PrinterAgent.UI
     {
         private readonly AppConfig _config;
         private readonly Action<AppConfig> _onSaveCallback;
+        private readonly Font _headerTitleFont = FluentTheme.Font(12.5f, FontStyle.Bold);
+        private readonly Font _headerSubFont = FluentTheme.Font(8.5f, FontStyle.Regular);
 
         private FluentTextBox _txtApiUrl = null!;
         private FluentTextBox _txtApiKey = null!;
@@ -48,13 +51,23 @@ namespace XeroxGo.PrinterAgent.UI
             DwmApi.ApplyWindows11Styling(this.Handle);
         }
 
+        protected override void Dispose(bool disposing)
+        {
+            if (disposing)
+            {
+                _headerTitleFont.Dispose();
+                _headerSubFont.Dispose();
+            }
+            base.Dispose(disposing);
+        }
+
         private void InitializeComponent(string currentStatus, string statusState)
         {
             SuspendLayout();
 
             Text = string.Empty;
             ShowIcon = false;
-            ClientSize = new Size(560, 644);
+            ClientSize = new Size(560, 642);
             FormBorderStyle = FormBorderStyle.FixedDialog;
             MaximizeBox = false;
             MinimizeBox = false;
@@ -78,14 +91,24 @@ namespace XeroxGo.PrinterAgent.UI
             _headerPanel = new Panel
             {
                 Location = new Point(marginX, currentY),
-                Size = new Size(contentWidth, 42),
+                Size = new Size(contentWidth, 40),
                 BackColor = FluentTheme.Background
+            };
+
+            // Direct GDI+ ClearType rendering ensures zero bounding box clipping between title and subtitle
+            _headerPanel.Paint += (s, e) =>
+            {
+                var g = e.Graphics;
+                g.TextRenderingHint = TextRenderingHint.ClearTypeGridFit;
+
+                TextRenderer.DrawText(g, "XeroxGo Agent", _headerTitleFont, new Point(74, 0), FluentTheme.TextPrimary, TextFormatFlags.NoPadding | TextFormatFlags.SingleLine);
+                TextRenderer.DrawText(g, "By Unnamed Enterprises", _headerSubFont, new Point(74, 20), FluentTheme.TextSecondary, TextFormatFlags.NoPadding | TextFormatFlags.SingleLine);
             };
 
             // Official XeroxGo Logo (Transparent Emblem)
             var logoBox = new PictureBox
             {
-                Location = new Point(0, 4),
+                Location = new Point(0, 3),
                 Size = new Size(63, 32),
                 BackColor = Color.Transparent
             };
@@ -109,34 +132,14 @@ namespace XeroxGo.PrinterAgent.UI
             };
             _headerPanel.Controls.Add(logoBox);
 
-            // Title & Subtitle
-            var lblTitle = new Label
-            {
-                Text = "XeroxGo Agent",
-                Font = FluentTheme.Font(13f, FontStyle.Bold),
-                ForeColor = FluentTheme.TextPrimary,
-                Location = new Point(74, 2),
-                AutoSize = true
-            };
-            var lblSubtitle = new Label
-            {
-                Text = "By Unnamed Enterprises",
-                Font = FluentTheme.Font(8.5f),
-                ForeColor = FluentTheme.TextSecondary,
-                Location = new Point(74, 24),
-                AutoSize = true
-            };
-            _headerPanel.Controls.Add(lblTitle);
-            _headerPanel.Controls.Add(lblSubtitle);
-
             // Status Badge (Top Right)
             _statusBadge = new FluentStatusBadge();
             _statusBadge.SetStatus(currentStatus, statusState);
-            _statusBadge.Location = new Point(contentWidth - _statusBadge.Width, 7);
+            _statusBadge.Location = new Point(contentWidth - _statusBadge.Width, 6);
             _headerPanel.Controls.Add(_statusBadge);
 
             Controls.Add(_headerPanel);
-            currentY += 54;
+            currentY += 52;
 
             // ==========================================
             // 2. Card 1: Cloud Backend
