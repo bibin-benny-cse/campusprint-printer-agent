@@ -36,9 +36,9 @@ Get pre-compiled binaries from the **[Releases Page](https://github.com/bibin-be
 | Asset | Format | Recommended For | Direct Download |
 | :--- | :--- | :--- | :--- |
 | **`XeroxGoAgent-Setup.exe`** | 1-Click Installer | Shopkeepers & Counter PCs (includes Start Menu shortcuts & auto-updater hooks) | [Download Installer](https://github.com/bibin-benny-cse/campusprint-printer-agent/releases/latest/download/XeroxGoAgent-Setup.exe) |
-| **`XeroxGo.PrinterAgent.exe`** | Standalone Single-File Binary | Portable execution without installation | [Download Portable EXE](https://github.com/bibin-benny-cse/campusprint-printer-agent/releases/latest/download/XeroxGo.PrinterAgent.exe) |
+| **`XeroxGo-Publisher-Certificate.cer`** | Publisher Certificate | Root certificate for automated or manual security trust | [Download Certificate](https://github.com/bibin-benny-cse/campusprint-printer-agent/releases/latest/download/XeroxGo-Publisher-Certificate.cer) |
 
-> **Zero Dependencies:** Both packages are self-contained. The print shop computer **does not** require .NET 8 or any runtimes installed.
+> **Zero Dependencies:** The installer is fully self-contained. The print shop computer **does not** require .NET 8 or any external runtimes installed.
 
 ---
 

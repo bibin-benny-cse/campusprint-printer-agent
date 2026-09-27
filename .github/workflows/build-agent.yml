@@ -84,11 +84,8 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           files: |
-            XeroxGo.PrinterAgent/bin/Release/net8.0-windows/win-x64/publish/XeroxGo.PrinterAgent.exe
             XeroxGo.PrinterAgent/Installer/Output/XeroxGoAgent-Setup.exe
             certs/XeroxGo-Publisher-Certificate.cer
-            XeroxGo.PrinterAgent/Installer/Trust-Publisher.bat
-            install.ps1
           draft: false
           prerelease: false
           generate_release_notes: true
