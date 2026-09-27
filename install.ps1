@@ -1,14 +1,8 @@
 <#
 ==============================================================================
- XeroxGo Agent - Unified Setup Manager (Install / Clean Uninstall)
- 
- Quick One-Liners:
-   Install / Update:
-     irm https://raw.githubusercontent.com/bibin-benny-cse/campusprint-printer-agent/main/install.ps1 | iex
-
-   Direct Clean Uninstall:
-     & ([scriptblock]::Create((irm https://raw.githubusercontent.com/bibin-benny-cse/campusprint-printer-agent/main/install.ps1))) -Uninstall
-     (Or simply run the script above — if already installed, it interactively prompts you)
+ XeroxGo Agent Setup Manager
+ Usage:
+   irm https://raw.githubusercontent.com/bibin-benny-cse/campusprint-printer-agent/main/install.ps1 | iex
 ==============================================================================
 #>
 
@@ -26,13 +20,16 @@ $RepoOwner = "bibin-benny-cse"
 $RepoName  = "campusprint-printer-agent"
 $ReleaseBaseUrl = "https://github.com/$RepoOwner/$RepoName/releases/latest/download"
 
-function Test-IsInstalled {
+function Get-InstalledPath {
     $uninstallRegKeys = @(
         "HKCU:\Software\Microsoft\Windows\CurrentVersion\Uninstall\{D37F619C-5582-4BC2-91DE-7A419266F3A1}_is1",
         "HKLM:\Software\Microsoft\Windows\CurrentVersion\Uninstall\{D37F619C-5582-4BC2-91DE-7A419266F3A1}_is1"
     )
     foreach ($reg in $uninstallRegKeys) {
-        if (Test-Path $reg) { return $true }
+        if (Test-Path $reg) {
+            $loc = (Get-ItemProperty -Path $reg -Name "InstallLocation" -ErrorAction SilentlyContinue).InstallLocation
+            if ($loc -and (Test-Path $loc)) { return $loc }
+        }
     }
     $candidateDirs = @(
         (Join-Path $env:LOCALAPPDATA "Programs\XeroxGo Agent"),
@@ -41,48 +38,39 @@ function Test-IsInstalled {
         (Join-Path $env:ProgramFiles "XeroxGo Printer Agent")
     )
     foreach ($dir in $candidateDirs) {
-        if ($dir -and (Test-Path (Join-Path $dir "XeroxGo.PrinterAgent.exe"))) { return $true }
+        if ($dir -and (Test-Path (Join-Path $dir "XeroxGo.PrinterAgent.exe"))) { return $dir }
     }
-    return $false
+    return $null
 }
 
-function Invoke-CleanUninstall {
-    Write-Host ""
-    Write-Host "================================================================" -ForegroundColor Cyan
-    Write-Host "     🗑️  XeroxGo Agent - Clean Uninstaller" -ForegroundColor Cyan
-    Write-Host "================================================================" -ForegroundColor Cyan
-    Write-Host ""
+function Invoke-LocalUninstall {
+    $installDir = Get-InstalledPath
+    $localScript = if ($installDir) { Join-Path $installDir "uninstall.ps1" } else { $null }
 
-    # 1. Terminate any active process
-    Write-Host "⏳ [1/7] Stopping active XeroxGo Agent processes..." -ForegroundColor Yellow
+    if ($localScript -and (Test-Path $localScript)) {
+        & $localScript
+        return
+    }
+
+    # Fallback uninstallation if local script was removed
+    Write-Host ""
+    Write-Host "XeroxGo Agent Uninstaller" -ForegroundColor Cyan
+    Write-Host "-------------------------" -ForegroundColor DarkGray
+
+    # 1. Stop active processes
+    Write-Host "Stopping processes..."
     $processes = Get-Process -Name "XeroxGo.PrinterAgent", "XeroxGoAgent-Setup" -ErrorAction SilentlyContinue
     if ($processes) {
         $processes | Stop-Process -Force
         Start-Sleep -Seconds 1
-        Write-Host "   ✓ Stopped active processes." -ForegroundColor Green
-    } else {
-        Write-Host "   ✓ No active process running." -ForegroundColor DarkGray
     }
 
-    # 2. Extract Custom Paths from config before purging (if exists)
-    $configPath = Join-Path $env:LOCALAPPDATA "XeroxGo\config.json"
-    $customTempDir = $null
-    if (Test-Path $configPath) {
-        try {
-            $rawConfig = Get-Content $configPath -Raw | ConvertFrom-Json
-            if ($rawConfig.TempDirectory -and (Test-Path $rawConfig.TempDirectory)) {
-                $customTempDir = $rawConfig.TempDirectory
-            }
-        } catch {}
-    }
-
-    # 3. Detect and Run official Inno Setup Uninstaller
-    Write-Host "⏳ [2/7] Running native application uninstaller..." -ForegroundColor Yellow
-    $discoveredInstallDirs = @()
+    # 2. Run native uninstaller
     $uninstallRegKeys = @(
         "HKCU:\Software\Microsoft\Windows\CurrentVersion\Uninstall\{D37F619C-5582-4BC2-91DE-7A419266F3A1}_is1",
         "HKLM:\Software\Microsoft\Windows\CurrentVersion\Uninstall\{D37F619C-5582-4BC2-91DE-7A419266F3A1}_is1"
     )
+    $discoveredInstallDirs = @()
     foreach ($regPath in $uninstallRegKeys) {
         if (Test-Path $regPath) {
             $regProps = Get-ItemProperty -Path $regPath -ErrorAction SilentlyContinue
@@ -92,7 +80,6 @@ function Invoke-CleanUninstall {
             if ($regProps.UninstallString) {
                 $uninstExe = $regProps.UninstallString.Trim('"')
                 if (Test-Path $uninstExe) {
-                    Write-Host "   Executing native uninstaller silently..." -ForegroundColor DarkGray
                     Start-Process -FilePath $uninstExe -ArgumentList "/SILENT", "/VERYSILENT", "/SUPPRESSMSGBOXES" -Wait
                     Start-Sleep -Seconds 2
                 }
@@ -100,78 +87,59 @@ function Invoke-CleanUninstall {
             Remove-Item -Path $regPath -Force -Recurse -ErrorAction SilentlyContinue
         }
     }
-    Write-Host "   ✓ Application uninstalled." -ForegroundColor Green
 
-    # 4. Remove all program files & binaries (default + discovered)
-    Write-Host "⏳ [3/7] Removing program files and residual binaries..." -ForegroundColor Yellow
+    # 3. Remove application files
+    Write-Host "Removing application files..."
     $installDirs = @(
         (Join-Path $env:LOCALAPPDATA "Programs\XeroxGo Agent"),
         (Join-Path $env:ProgramFiles "XeroxGo Agent"),
         (Join-Path ${env:ProgramFiles(x86)} "XeroxGo Agent"),
         (Join-Path $env:LOCALAPPDATA "Programs\XeroxGo Printer Agent"),
-        (Join-Path $env:ProgramFiles "XeroxGo Printer Agent"),
-        (Join-Path ${env:ProgramFiles(x86)} "XeroxGo Printer Agent")
+        (Join-Path $env:ProgramFiles "XeroxGo Printer Agent")
     ) + $discoveredInstallDirs | Select-Object -Unique
 
     foreach ($dir in $installDirs) {
         if ($dir -and (Test-Path $dir)) {
             Remove-Item -Path $dir -Recurse -Force -ErrorAction SilentlyContinue
-            Write-Host "   ✓ Removed: $dir" -ForegroundColor Green
         }
     }
 
-    # 5. Purge all user data, configuration, logs, and spooling temp queues
-    Write-Host "⏳ [4/7] Purging user data, logs, and configuration..." -ForegroundColor Yellow
+    # 4. Remove configuration and data
+    Write-Host "Removing configuration and data..."
     $dataDir = Join-Path $env:LOCALAPPDATA "XeroxGo"
     if (Test-Path $dataDir) {
         Remove-Item -Path $dataDir -Recurse -Force -ErrorAction SilentlyContinue
-        Write-Host "   ✓ Purged: $dataDir" -ForegroundColor Green
-    } else {
-        Write-Host "   ✓ No residual data directory found." -ForegroundColor DarkGray
-    }
-    if ($customTempDir -and (Test-Path $customTempDir) -and ($customTempDir -ne $dataDir)) {
-        Remove-Item -Path $customTempDir -Recurse -Force -ErrorAction SilentlyContinue
-        Write-Host "   ✓ Purged custom temp: $customTempDir" -ForegroundColor Green
     }
 
-    # 6. Remove autostart registry and shortcuts (User + All Users/Public)
-    Write-Host "⏳ [5/7] Cleaning Windows Startup registry & shortcuts..." -ForegroundColor Yellow
+    # 5. Remove startup registration
+    Write-Host "Removing startup registration..."
     $runRegs = @(
         "HKCU:\Software\Microsoft\Windows\CurrentVersion\Run",
         "HKLM:\Software\Microsoft\Windows\CurrentVersion\Run"
     )
     foreach ($runReg in $runRegs) {
         if (Test-Path $runReg) {
-            $val = Get-ItemProperty -Path $runReg -Name "XeroxGoPrinterAgent" -ErrorAction SilentlyContinue
-            if ($val) {
-                Remove-ItemProperty -Path $runReg -Name "XeroxGoPrinterAgent" -Force -ErrorAction SilentlyContinue
-                Write-Host "   ✓ Removed startup registry key ($runReg)." -ForegroundColor Green
-            }
+            Remove-ItemProperty -Path $runReg -Name "XeroxGoPrinterAgent" -Force -ErrorAction SilentlyContinue
         }
     }
 
-    # Remove all possible shortcuts (User + Common/Public Desktop and Start Menu)
+    # 6. Remove shortcuts
     $shortcuts = @(
         (Join-Path ([Environment]::GetFolderPath('Desktop')) "XeroxGo Agent.lnk"),
         (Join-Path ([Environment]::GetFolderPath('Programs')) "XeroxGo Agent.lnk"),
         (Join-Path ([Environment]::GetFolderPath('CommonDesktop')) "XeroxGo Agent.lnk"),
         (Join-Path ([Environment]::GetFolderPath('CommonPrograms')) "XeroxGo Agent.lnk"),
         (Join-Path ([Environment]::GetFolderPath('Desktop')) "XeroxGo Printer Agent.lnk"),
-        (Join-Path ([Environment]::GetFolderPath('Programs')) "XeroxGo Printer Agent.lnk"),
-        (Join-Path ([Environment]::GetFolderPath('CommonDesktop')) "XeroxGo Printer Agent.lnk"),
-        (Join-Path ([Environment]::GetFolderPath('CommonPrograms')) "XeroxGo Printer Agent.lnk"),
-        (Join-Path ([Environment]::GetFolderPath('Desktop')) "XeroxGo.lnk"),
-        (Join-Path ([Environment]::GetFolderPath('Programs')) "XeroxGo.lnk")
+        (Join-Path ([Environment]::GetFolderPath('Programs')) "XeroxGo Printer Agent.lnk")
     )
-    foreach ($shortcut in $shortcuts) {
-        if ($shortcut -and (Test-Path $shortcut)) {
-            Remove-Item $shortcut -Force -ErrorAction SilentlyContinue
-            Write-Host "   ✓ Removed shortcut: $shortcut" -ForegroundColor Green
+    foreach ($sc in $shortcuts) {
+        if ($sc -and (Test-Path $sc)) {
+            Remove-Item $sc -Force -ErrorAction SilentlyContinue
         }
     }
 
-    # 7. Remove publisher certificate from stores & cleanup temp cache
-    Write-Host "⏳ [6/7] Cleaning certificate store and temporary files..." -ForegroundColor Yellow
+    # 7. Remove certificates
+    Write-Host "Removing certificates..."
     $certStores = @(
         "Cert:\CurrentUser\TrustedPublisher",
         "Cert:\CurrentUser\Root",
@@ -180,44 +148,29 @@ function Invoke-CleanUninstall {
     )
     foreach ($store in $certStores) {
         if (Test-Path $store) {
-            try {
-                Get-ChildItem -Path $store -ErrorAction SilentlyContinue |
-                    Where-Object { $_.Subject -like "*CN=XeroxGo Technologies*" } |
-                    ForEach-Object {
-                        Remove-Item -Path $_.PSPath -Force -ErrorAction SilentlyContinue
-                        Write-Host "   ✓ Removed publisher certificate from $store" -ForegroundColor Green
-                    }
-            } catch {}
+            Get-ChildItem -Path $store -ErrorAction SilentlyContinue |
+                Where-Object { $_.Subject -like "*CN=XeroxGo Technologies*" } |
+                ForEach-Object {
+                    Remove-Item -Path $_.PSPath -Force -ErrorAction SilentlyContinue
+                }
         }
     }
 
-    # 8. Clean up crash dumps and installer temp caches
-    Write-Host "⏳ [7/7] Cleaning temporary download caches and crash dumps..." -ForegroundColor Yellow
+    # 8. Clean temporary files
     $tempDir = Join-Path $env:TEMP "XeroxGoInstall"
     if (Test-Path $tempDir) {
         Remove-Item -Path $tempDir -Recurse -Force -ErrorAction SilentlyContinue
     }
-    $crashDumpDir = Join-Path $env:LOCALAPPDATA "CrashDumps"
-    if (Test-Path $crashDumpDir) {
-        Get-ChildItem -Path $crashDumpDir -Filter "XeroxGo*.dmp" -ErrorAction SilentlyContinue |
-            Remove-Item -Force -ErrorAction SilentlyContinue
-    }
-    Write-Host "   ✓ Temporary caches and dumps cleaned." -ForegroundColor Green
 
     Write-Host ""
-    Write-Host "================================================================" -ForegroundColor Cyan
-    Write-Host "✨ XeroxGo Agent has been cleanly and fully uninstalled!" -ForegroundColor Green
-    Write-Host "   Every file, directory, registry key, shortcut, and certificate has been purged." -ForegroundColor Green
-    Write-Host "================================================================" -ForegroundColor Cyan
+    Write-Host "Uninstall complete." -ForegroundColor Green
     Write-Host ""
 }
 
-function Invoke-InstallOrUpdate {
+function Invoke-Install {
     Write-Host ""
-    Write-Host "================================================================" -ForegroundColor Cyan
-    Write-Host "     🖨️  XeroxGo Agent - Quick Installer" -ForegroundColor Cyan
-    Write-Host "================================================================" -ForegroundColor Cyan
-    Write-Host ""
+    Write-Host "XeroxGo Agent Setup" -ForegroundColor Cyan
+    Write-Host "-------------------" -ForegroundColor DarkGray
 
     # 1. Prepare temporary directory
     $tempDir = Join-Path $env:TEMP "XeroxGoInstall"
@@ -228,87 +181,90 @@ function Invoke-InstallOrUpdate {
     $installerPath = Join-Path $tempDir "XeroxGoAgent-Setup.exe"
     $certPath      = Join-Path $tempDir "XeroxGo-Publisher-Certificate.cer"
 
-    # 2. Download the latest signed installer
+    # 2. Download installer
     $installerUrl = "$ReleaseBaseUrl/XeroxGoAgent-Setup.exe"
-    Write-Host "⏳ [1/3] Downloading latest XeroxGoAgent-Setup.exe..." -ForegroundColor Yellow
+    Write-Host "Downloading installer..."
     try {
         Invoke-WebRequest -Uri $installerUrl -OutFile $installerPath -UseBasicParsing
-        Write-Host "   ✓ Installer downloaded successfully." -ForegroundColor Green
     } catch {
-        Write-Host "   ❌ Failed to download installer from: $installerUrl" -ForegroundColor Red
-        Write-Host "   Error: $_" -ForegroundColor Red
+        Write-Host "Error: Failed to download installer from: $installerUrl" -ForegroundColor Red
         return
     }
 
-    # 3. Download and register Publisher Certificate for Current User (No Admin required)
+    # 3. Register publisher certificate for current user
     $certUrl = "$ReleaseBaseUrl/XeroxGo-Publisher-Certificate.cer"
-    Write-Host "⏳ [2/3] Registering Verified Publisher certificate..." -ForegroundColor Yellow
     try {
         Invoke-WebRequest -Uri $certUrl -OutFile $certPath -UseBasicParsing
-        
         if (Get-Command Import-Certificate -ErrorAction SilentlyContinue) {
             Import-Certificate -FilePath $certPath -CertStoreLocation "Cert:\CurrentUser\TrustedPublisher" | Out-Null
             Import-Certificate -FilePath $certPath -CertStoreLocation "Cert:\CurrentUser\Root" -ErrorAction SilentlyContinue | Out-Null
         } else {
             & certutil -user -addstore "TrustedPublisher" $certPath | Out-Null
         }
-        Write-Host "   ✓ Publisher verified for Current User." -ForegroundColor Green
-    } catch {
-        Write-Host "   ℹ Note: Certificate auto-registration skipped ($($_)). Continuing..." -ForegroundColor DarkGray
-    }
+    } catch {}
 
-    # 4. Remove any Mark of the Web tags (ensures zero Smart App Control friction)
-    Write-Host "⏳ [3/3] Preparing installer execution..." -ForegroundColor Yellow
+    # 4. Remove Mark of the Web
     if (Get-Command Unblock-File -ErrorAction SilentlyContinue) {
         Unblock-File -Path $installerPath -ErrorAction SilentlyContinue
     }
-    Write-Host "   ✓ Installer verified and unblocked." -ForegroundColor Green
 
+    # 5. Launch installer
+    Write-Host "Starting setup wizard..." -ForegroundColor Green
     Write-Host ""
-    Write-Host "================================================================" -ForegroundColor Cyan
-    Write-Host "🚀 Launching XeroxGo Agent Setup Wizard..." -ForegroundColor Green
-    Write-Host "================================================================" -ForegroundColor Cyan
-    Write-Host ""
+    $installArgs = if ($Silent) { @("/SILENT", "/VERYSILENT", "/SUPPRESSMSGBOXES") } else { @() }
+    Start-Process -FilePath $installerPath -ArgumentList $installArgs -Wait
 
-    # 5. Launch the installer
-    Start-Process -FilePath $installerPath
-}
-
-# Determine Action
-$targetAction = ""
-if ($Uninstall -or ($Action -eq 'uninstall') -or ($env:XEROXGO_ACTION -eq 'uninstall') -or ($env:UNINSTALL -eq '1')) {
-    $targetAction = "uninstall"
-} elseif ($Install -or ($Action -eq 'install') -or ($env:XEROXGO_ACTION -eq 'install')) {
-    $targetAction = "install"
-} else {
-    # Interactive check: If already installed, offer choice
-    if (Test-IsInstalled) {
-        Write-Host ""
-        Write-Host "================================================================" -ForegroundColor Cyan
-        Write-Host "  ℹ XeroxGo Agent is currently installed on this system." -ForegroundColor Yellow
-        Write-Host "================================================================" -ForegroundColor Cyan
-        Write-Host ""
-        Write-Host "Please select an option:"
-        Write-Host "  [1] Reinstall / Update to Latest Version" -ForegroundColor Green
-        Write-Host "  [2] Full Clean Uninstall (Removes app, configs, logs, certs)" -ForegroundColor Red
-        Write-Host "  [Q] Cancel / Exit" -ForegroundColor DarkGray
-        Write-Host ""
-        $choice = Read-Host "Enter choice (1, 2, or Q)"
-        if ($choice -eq '2') {
-            $targetAction = "uninstall"
-        } elseif ($choice -eq '1') {
-            $targetAction = "install"
-        } else {
-            Write-Host "Operation cancelled." -ForegroundColor Yellow
-            return
+    # 6. Ensure local uninstaller exists in installation directory
+    $installedDir = Get-InstalledPath
+    if ($installedDir) {
+        $targetUninstall = Join-Path $installedDir "uninstall.ps1"
+        if (-not (Test-Path $targetUninstall)) {
+            $uninstallUrl = "$ReleaseBaseUrl/uninstall.ps1"
+            $rawUninstallUrl = "https://raw.githubusercontent.com/$RepoOwner/$RepoName/main/XeroxGo.PrinterAgent/Installer/uninstall.ps1"
+            try {
+                Invoke-WebRequest -Uri $uninstallUrl -OutFile $targetUninstall -UseBasicParsing -ErrorAction Stop
+            } catch {
+                try {
+                    Invoke-WebRequest -Uri $rawUninstallUrl -OutFile $targetUninstall -UseBasicParsing -ErrorAction SilentlyContinue
+                } catch {}
+            }
         }
-    } else {
-        $targetAction = "install"
     }
 }
 
-if ($targetAction -eq 'uninstall') {
-    Invoke-CleanUninstall
+# Determine Action
+$installedPath = Get-InstalledPath
+
+if ($Uninstall -or ($Action -eq 'uninstall') -or ($env:XEROXGO_ACTION -eq 'uninstall') -or ($env:UNINSTALL -eq '1')) {
+    Invoke-LocalUninstall
+} elseif ($Install -or ($Action -eq 'install')) {
+    Invoke-Install
+} elseif ($installedPath) {
+    Write-Host ""
+    Write-Host "XeroxGo Agent Setup" -ForegroundColor Cyan
+    Write-Host "-------------------" -ForegroundColor DarkGray
+    Write-Host "An existing installation was found." -ForegroundColor Yellow
+    Write-Host ""
+    Write-Host "  1) Reinstall"
+    Write-Host "  2) Uninstall"
+    Write-Host "  3) Cancel"
+    Write-Host ""
+    $choice = Read-Host "Select an option [1-3]"
+    switch ($choice) {
+        "1" {
+            Write-Host ""
+            Write-Host "Reinstalling XeroxGo Agent..." -ForegroundColor Cyan
+            Invoke-LocalUninstall
+            Start-Sleep -Seconds 1
+            Invoke-Install
+        }
+        "2" {
+            Invoke-LocalUninstall
+        }
+        default {
+            Write-Host "Cancelled." -ForegroundColor DarkGray
+        }
+    }
 } else {
-    Invoke-InstallOrUpdate
+    Invoke-Install
 }
