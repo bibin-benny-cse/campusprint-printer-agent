@@ -1,4 +1,4 @@
-name: Build Windows Agent
+name: Build XeroxGo Agent
 
 on:
   push:

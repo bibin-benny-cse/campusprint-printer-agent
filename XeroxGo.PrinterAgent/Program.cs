@@ -19,7 +19,7 @@ namespace XeroxGo.PrinterAgent
             if (!isOnlyInstance)
             {
                 MessageBox.Show(
-                    "XeroxGo Printer Agent is already running in your Windows taskbar system tray.",
+                    "XeroxGo Agent is already running in your Windows taskbar system tray.",
                     "XeroxGo Already Running",
                     MessageBoxButtons.OK,
                     MessageBoxIcon.Information
@@ -55,7 +55,7 @@ namespace XeroxGo.PrinterAgent
             try
             {
                 Logger.Info("=================================================");
-                Logger.Info("--- XeroxGo Windows Printer Agent (.NET 8) ---");
+                Logger.Info("--- XeroxGo Agent (.NET 8) ---");
                 Logger.Info($"Machine: {Environment.MachineName}, User: {Environment.UserName}");
                 Logger.Info("=================================================");
 

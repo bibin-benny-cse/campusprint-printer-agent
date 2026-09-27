@@ -1,6 +1,6 @@
 <#
 ==============================================================================
- XeroxGo Windows Printer Agent - Unified Setup Manager (Install / Clean Uninstall)
+ XeroxGo Agent - Unified Setup Manager (Install / Clean Uninstall)
  
  Quick One-Liners:
    Install / Update:
@@ -35,6 +35,8 @@ function Test-IsInstalled {
         if (Test-Path $reg) { return $true }
     }
     $candidateDirs = @(
+        (Join-Path $env:LOCALAPPDATA "Programs\XeroxGo Agent"),
+        (Join-Path $env:ProgramFiles "XeroxGo Agent"),
         (Join-Path $env:LOCALAPPDATA "Programs\XeroxGo Printer Agent"),
         (Join-Path $env:ProgramFiles "XeroxGo Printer Agent")
     )
@@ -47,12 +49,12 @@ function Test-IsInstalled {
 function Invoke-CleanUninstall {
     Write-Host ""
     Write-Host "================================================================" -ForegroundColor Cyan
-    Write-Host "     🗑️  XeroxGo Windows Printer Agent - Clean Uninstaller" -ForegroundColor Cyan
+    Write-Host "     🗑️  XeroxGo Agent - Clean Uninstaller" -ForegroundColor Cyan
     Write-Host "================================================================" -ForegroundColor Cyan
     Write-Host ""
 
     # 1. Terminate any active process
-    Write-Host "⏳ [1/7] Stopping active XeroxGo Printer Agent processes..." -ForegroundColor Yellow
+    Write-Host "⏳ [1/7] Stopping active XeroxGo Agent processes..." -ForegroundColor Yellow
     $processes = Get-Process -Name "XeroxGo.PrinterAgent", "XeroxGoAgent-Setup" -ErrorAction SilentlyContinue
     if ($processes) {
         $processes | Stop-Process -Force
@@ -103,6 +105,9 @@ function Invoke-CleanUninstall {
     # 4. Remove all program files & binaries (default + discovered)
     Write-Host "⏳ [3/7] Removing program files and residual binaries..." -ForegroundColor Yellow
     $installDirs = @(
+        (Join-Path $env:LOCALAPPDATA "Programs\XeroxGo Agent"),
+        (Join-Path $env:ProgramFiles "XeroxGo Agent"),
+        (Join-Path ${env:ProgramFiles(x86)} "XeroxGo Agent"),
         (Join-Path $env:LOCALAPPDATA "Programs\XeroxGo Printer Agent"),
         (Join-Path $env:ProgramFiles "XeroxGo Printer Agent"),
         (Join-Path ${env:ProgramFiles(x86)} "XeroxGo Printer Agent")
@@ -147,6 +152,10 @@ function Invoke-CleanUninstall {
 
     # Remove all possible shortcuts (User + Common/Public Desktop and Start Menu)
     $shortcuts = @(
+        (Join-Path ([Environment]::GetFolderPath('Desktop')) "XeroxGo Agent.lnk"),
+        (Join-Path ([Environment]::GetFolderPath('Programs')) "XeroxGo Agent.lnk"),
+        (Join-Path ([Environment]::GetFolderPath('CommonDesktop')) "XeroxGo Agent.lnk"),
+        (Join-Path ([Environment]::GetFolderPath('CommonPrograms')) "XeroxGo Agent.lnk"),
         (Join-Path ([Environment]::GetFolderPath('Desktop')) "XeroxGo Printer Agent.lnk"),
         (Join-Path ([Environment]::GetFolderPath('Programs')) "XeroxGo Printer Agent.lnk"),
         (Join-Path ([Environment]::GetFolderPath('CommonDesktop')) "XeroxGo Printer Agent.lnk"),
@@ -197,7 +206,7 @@ function Invoke-CleanUninstall {
 
     Write-Host ""
     Write-Host "================================================================" -ForegroundColor Cyan
-    Write-Host "✨ XeroxGo Printer Agent has been cleanly and fully uninstalled!" -ForegroundColor Green
+    Write-Host "✨ XeroxGo Agent has been cleanly and fully uninstalled!" -ForegroundColor Green
     Write-Host "   Every file, directory, registry key, shortcut, and certificate has been purged." -ForegroundColor Green
     Write-Host "================================================================" -ForegroundColor Cyan
     Write-Host ""
@@ -206,7 +215,7 @@ function Invoke-CleanUninstall {
 function Invoke-InstallOrUpdate {
     Write-Host ""
     Write-Host "================================================================" -ForegroundColor Cyan
-    Write-Host "     🖨️  XeroxGo Windows Printer Agent - Quick Installer" -ForegroundColor Cyan
+    Write-Host "     🖨️  XeroxGo Agent - Quick Installer" -ForegroundColor Cyan
     Write-Host "================================================================" -ForegroundColor Cyan
     Write-Host ""
 
@@ -257,7 +266,7 @@ function Invoke-InstallOrUpdate {
 
     Write-Host ""
     Write-Host "================================================================" -ForegroundColor Cyan
-    Write-Host "🚀 Launching XeroxGo Printer Agent Setup Wizard..." -ForegroundColor Green
+    Write-Host "🚀 Launching XeroxGo Agent Setup Wizard..." -ForegroundColor Green
     Write-Host "================================================================" -ForegroundColor Cyan
     Write-Host ""
 
@@ -276,7 +285,7 @@ if ($Uninstall -or ($Action -eq 'uninstall') -or ($env:XEROXGO_ACTION -eq 'unins
     if (Test-IsInstalled) {
         Write-Host ""
         Write-Host "================================================================" -ForegroundColor Cyan
-        Write-Host "  ℹ XeroxGo Printer Agent is currently installed on this system." -ForegroundColor Yellow
+        Write-Host "  ℹ XeroxGo Agent is currently installed on this system." -ForegroundColor Yellow
         Write-Host "================================================================" -ForegroundColor Cyan
         Write-Host ""
         Write-Host "Please select an option:"

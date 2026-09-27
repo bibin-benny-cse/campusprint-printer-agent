@@ -73,7 +73,7 @@ namespace XeroxGo.PrinterAgent.UI
 
         private void InitializeWindow()
         {
-            Title = "XeroxGo — Printer Agent Settings";
+            Title = "XeroxGo — Agent Settings";
             Width = 620;
             Height = 740;
             MinWidth = 540;
@@ -153,7 +153,7 @@ namespace XeroxGo.PrinterAgent.UI
             var titlePanel = new StackPanel { VerticalAlignment = WpfVAlign.Center };
             var txtTitle = new TextBlock
             {
-                Text = "XeroxGo Printer Agent",
+                Text = "XeroxGo Agent",
                 FontSize = 18,
                 FontWeight = FontWeights.SemiBold,
                 Foreground = new SolidColorBrush(Color.FromRgb(15, 23, 42))

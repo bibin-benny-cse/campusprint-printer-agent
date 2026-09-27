@@ -16,7 +16,7 @@
     <Version>0.1.5</Version>
     <AssemblyVersion>0.1.5.0</AssemblyVersion>
     <FileVersion>0.1.5.0</FileVersion>
-    <Product>XeroxGo Windows Printer Agent</Product>
+    <Product>XeroxGo Agent</Product>
     <Company>XeroxGo Technologies</Company>
     
     <!-- Self-Contained Single-File Publish Configuration -->

@@ -1,4 +1,4 @@
-# 🖨️ XeroxGo Windows Printer Agent (.NET 8 Edition)
+# 🖨️ XeroxGo Agent (.NET 8 Edition)
 
 A high-reliability, native Windows System Tray application designed for unattended operation on college print-shop counters. It bridges the cloud-hosted **XeroxGo** queue directly with local physical Windows printers.
 

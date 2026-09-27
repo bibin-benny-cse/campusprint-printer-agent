@@ -1,4 +1,4 @@
-# 🖨️ XeroxGo Windows Printer Agent
+# 🖨️ XeroxGo Agent
 
 [![Release](https://img.shields.io/github/v/release/bibin-benny-cse/campusprint-printer-agent?color=blue&label=Latest%20Release)](https://github.com/bibin-benny-cse/campusprint-printer-agent/releases/latest)
 [![Platform](https://img.shields.io/badge/Platform-Windows%2010%20%7C%2011%20(x64)-0078D6?logo=windows)](https://github.com/bibin-benny-cse/campusprint-printer-agent/releases/latest)

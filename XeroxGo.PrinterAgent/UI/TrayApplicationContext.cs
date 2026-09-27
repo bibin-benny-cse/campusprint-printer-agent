@@ -56,7 +56,7 @@ namespace XeroxGo.PrinterAgent.UI
             {
                 Icon = CreateStatusIcon(Color.FromArgb(59, 130, 246)), // Default Blue
                 ContextMenuStrip = _contextMenu,
-                Text = "XeroxGo Printer Agent",
+                Text = "XeroxGo Agent",
                 Visible = true
             };
 
