@@ -1,21 +1,29 @@
-# Sub-repositories with their own git tracking
-backend/
-frontend/
+# Build outputs & artifacts
+bin/
+obj/
+*.exe
+*.dll
+*.pdb
+Installer/Output/
 
-# Dependencies
-node_modules/
+# .NET User-specific files
+*.rsuser
+*.suo
+*.user
+*.userosscache
+*.sln.docstates
 
-# Logs & temp
+# IDE files
+.vs/
+.vscode/
+.idea/
+
+# Windows temp & logs
 logs/
 *.log
 temp/
 
-# Environment variables
+# Environment & local secrets
 .env
 .env.local
-
-# Build outputs
-bin/
-obj/
-*.exe
-Installer/Output/
+appsettings.local.json
