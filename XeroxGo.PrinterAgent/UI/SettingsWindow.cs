@@ -52,7 +52,8 @@ namespace XeroxGo.PrinterAgent.UI
         {
             SuspendLayout();
 
-            Text = "XeroxGo Agent";
+            Text = string.Empty;
+            ShowIcon = false;
             ClientSize = new Size(560, 668);
             FormBorderStyle = FormBorderStyle.FixedDialog;
             MaximizeBox = false;
