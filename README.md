@@ -8,6 +8,17 @@ A high-reliability, native Windows System Tray application designed for unattend
 
 ---
 
+## ⚡ Quick 1-Line Install (Windows 10 & 11)
+
+Run this single command in **Windows PowerShell** to automatically fetch and launch the latest installer:
+
+```powershell
+irm https://raw.githubusercontent.com/bibin-benny-cse/campusprint-printer-agent/main/install.ps1 | iex
+```
+> **Seamless Execution:** Running via PowerShell avoids browser Mark-of-the-Web restrictions, launching the setup wizard directly with zero certificate setup required.
+
+---
+
 ## 📦 Downloads & Releases
 
 Get the latest pre-compiled binaries from the **[Releases Page](https://github.com/bibin-benny-cse/campusprint-printer-agent/releases/latest)**:
