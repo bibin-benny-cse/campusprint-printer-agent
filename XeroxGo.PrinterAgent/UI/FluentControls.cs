@@ -61,18 +61,27 @@ namespace XeroxGo.PrinterAgent.UI
         public static Font Font(float size, FontStyle style = FontStyle.Regular) =>
             new Font(PrimaryFontName, size, style, GraphicsUnit.Point);
 
-        // Palette
+        // Backgrounds
         public static readonly Color Background = Color.FromArgb(248, 250, 252);     // Slate 50
         public static readonly Color CardBackground = Color.FromArgb(255, 255, 255); // Pure White
         public static readonly Color CardBorder = Color.FromArgb(226, 232, 240);     // Slate 200
 
+        // Typography
         public static readonly Color TextPrimary = Color.FromArgb(15, 23, 42);       // Slate 900
         public static readonly Color TextSecondary = Color.FromArgb(100, 116, 139);  // Slate 500
+        public static readonly Color TextMuted = Color.FromArgb(148, 163, 184);      // Slate 400
 
-        public static readonly Color Accent = Color.FromArgb(0, 103, 192);           // Windows 11 Fluent Blue (#0067C0)
+        // Accent / Actions (Windows 11 Blue)
+        public static readonly Color Accent = Color.FromArgb(0, 103, 192);           // #0067C0
         public static readonly Color AccentHover = Color.FromArgb(0, 90, 170);
         public static readonly Color AccentPressed = Color.FromArgb(0, 77, 145);
 
+        // Input Borders
+        public static readonly Color InputBorder = Color.FromArgb(203, 213, 225);    // Slate 300
+        public static readonly Color InputBorderHover = Color.FromArgb(148, 163, 184);
+        public static readonly Color InputBorderFocused = Color.FromArgb(0, 103, 192);
+
+        // Status Colors
         public static readonly Color Success = Color.FromArgb(16, 185, 129);         // Emerald 500
         public static readonly Color Warning = Color.FromArgb(245, 158, 11);         // Amber 500
         public static readonly Color Danger = Color.FromArgb(239, 68, 68);           // Rose 500
@@ -80,6 +89,12 @@ namespace XeroxGo.PrinterAgent.UI
         public static GraphicsPath CreateRoundedPath(Rectangle rect, int radius)
         {
             var path = new GraphicsPath();
+            if (radius <= 0)
+            {
+                path.AddRectangle(rect);
+                return path;
+            }
+
             int diameter = radius * 2;
             var arc = new Rectangle(rect.X, rect.Y, diameter, diameter);
 
@@ -144,6 +159,10 @@ namespace XeroxGo.PrinterAgent.UI
     #endregion
 
     #region Fluent UI Controls
+
+    /// <summary>
+    /// Clean card container with 8px rounded corners and 1px border.
+    /// </summary>
     public class FluentCard : Panel
     {
         public int CornerRadius { get; set; } = 8;
@@ -153,13 +172,14 @@ namespace XeroxGo.PrinterAgent.UI
         {
             SetStyle(ControlStyles.AllPaintingInWmPaint | ControlStyles.UserPaint | ControlStyles.OptimizedDoubleBuffer, true);
             BackColor = FluentTheme.CardBackground;
-            Padding = new Padding(16);
+            Padding = new Padding(20);
         }
 
         protected override void OnPaint(PaintEventArgs e)
         {
             base.OnPaint(e);
             e.Graphics.SmoothingMode = SmoothingMode.AntiAlias;
+            e.Graphics.PixelOffsetMode = PixelOffsetMode.HighQuality;
 
             var rect = new Rectangle(0, 0, Width - 1, Height - 1);
             using var path = FluentTheme.CreateRoundedPath(rect, CornerRadius);
@@ -172,10 +192,106 @@ namespace XeroxGo.PrinterAgent.UI
         }
     }
 
+    /// <summary>
+    /// Modern Windows 11 text input container with flat 1px border and focus ring.
+    /// Eliminates legacy 3D sunken borders.
+    /// </summary>
+    public class FluentTextBox : Panel
+    {
+        private readonly TextBox _textBox;
+        private bool _isHovered = false;
+        private bool _isFocused = false;
+
+        public TextBox InnerTextBox => _textBox;
+
+        public override string Text
+        {
+            get => _textBox.Text;
+            set => _textBox.Text = value;
+        }
+
+        public bool UseSystemPasswordChar
+        {
+            get => _textBox.UseSystemPasswordChar;
+            set => _textBox.UseSystemPasswordChar = value;
+        }
+
+        public new event EventHandler? TextChanged
+        {
+            add => _textBox.TextChanged += value;
+            remove => _textBox.TextChanged -= value;
+        }
+
+        public FluentTextBox()
+        {
+            SetStyle(ControlStyles.AllPaintingInWmPaint | ControlStyles.UserPaint | ControlStyles.OptimizedDoubleBuffer, true);
+            BackColor = Color.White;
+            Height = 32;
+            Cursor = Cursors.IBeam;
+
+            _textBox = new TextBox
+            {
+                BorderStyle = BorderStyle.None,
+                Font = FluentTheme.Font(9.5f),
+                ForeColor = FluentTheme.TextPrimary,
+                BackColor = Color.White,
+                Location = new Point(10, 7),
+                Width = Width - 20,
+                Anchor = AnchorStyles.Left | AnchorStyles.Right | AnchorStyles.Top
+            };
+
+            _textBox.GotFocus += (s, e) => { _isFocused = true; Invalidate(); };
+            _textBox.LostFocus += (s, e) => { _isFocused = false; Invalidate(); };
+            _textBox.MouseEnter += (s, e) => { _isHovered = true; Invalidate(); };
+            _textBox.MouseLeave += (s, e) => { _isHovered = false; Invalidate(); };
+
+            Controls.Add(_textBox);
+            Click += (s, e) => _textBox.Focus();
+        }
+
+        protected override void OnMouseEnter(EventArgs e) { _isHovered = true; Invalidate(); base.OnMouseEnter(e); }
+        protected override void OnMouseLeave(EventArgs e) { _isHovered = false; Invalidate(); base.OnMouseLeave(e); }
+        protected override void OnResize(EventArgs eventargs)
+        {
+            base.OnResize(eventargs);
+            if (_textBox != null)
+            {
+                _textBox.Width = Math.Max(10, Width - 20);
+                _textBox.Location = new Point(10, (Height - _textBox.PreferredHeight) / 2);
+            }
+        }
+
+        protected override void OnPaint(PaintEventArgs e)
+        {
+            var g = e.Graphics;
+            g.SmoothingMode = SmoothingMode.AntiAlias;
+            g.PixelOffsetMode = PixelOffsetMode.HighQuality;
+
+            var rect = new Rectangle(0, 0, Width - 1, Height - 1);
+            using var path = FluentTheme.CreateRoundedPath(rect, 4);
+
+            using var bgBrush = new SolidBrush(BackColor);
+            g.FillPath(bgBrush, path);
+
+            Color borderColor = _isFocused
+                ? FluentTheme.InputBorderFocused
+                : (_isHovered ? FluentTheme.InputBorderHover : FluentTheme.InputBorder);
+
+            float borderWidth = _isFocused ? 1.5f : 1f;
+            using var borderPen = new Pen(borderColor, borderWidth);
+            g.DrawPath(borderPen, path);
+        }
+
+        public new bool Focus() => _textBox.Focus();
+    }
+
+    /// <summary>
+    /// Modern Windows 11 button with crisp 4px corner radius and stateful hover/press rendering.
+    /// </summary>
     public class FluentButton : Button
     {
         public bool IsPrimary { get; set; } = false;
-        public int CornerRadius { get; set; } = 6;
+        public int CornerRadius { get; set; } = 4;
         private bool _isHovered = false;
         private bool _isPressed = false;
 
@@ -186,7 +302,7 @@ namespace XeroxGo.PrinterAgent.UI
             FlatAppearance.BorderSize = 0;
             Cursor = Cursors.Hand;
             Font = FluentTheme.Font(9.5f, FontStyle.Regular);
-            Size = new Size(120, 34);
+            Height = 32;
         }
 
         protected override void OnMouseEnter(EventArgs e) { _isHovered = true; Invalidate(); base.OnMouseEnter(e); }
@@ -198,6 +314,14 @@ namespace XeroxGo.PrinterAgent.UI
         {
             var g = pevent.Graphics;
             g.SmoothingMode = SmoothingMode.AntiAlias;
+            g.PixelOffsetMode = PixelOffsetMode.HighQuality;
+
+            // Clear parent background smoothly
+            if (Parent != null)
+            {
+                using var parentBrush = new SolidBrush(Parent.BackColor);
+                g.FillRectangle(parentBrush, ClientRectangle);
+            }
 
             var rect = new Rectangle(0, 0, Width - 1, Height - 1);
             using var path = FluentTheme.CreateRoundedPath(rect, CornerRadius);
@@ -216,7 +340,7 @@ namespace XeroxGo.PrinterAgent.UI
             {
                 bgColor = _isPressed ? Color.FromArgb(226, 232, 240) : (_isHovered ? Color.FromArgb(241, 245, 249) : Color.White);
                 textColor = FluentTheme.TextPrimary;
-                borderColor = FluentTheme.CardBorder;
+                borderColor = _isHovered ? FluentTheme.InputBorderHover : FluentTheme.CardBorder;
             }
 
             using (var brush = new SolidBrush(bgColor))
@@ -224,9 +348,8 @@ namespace XeroxGo.PrinterAgent.UI
                 g.FillPath(brush, path);
             }
 
-            if (!IsPrimary)
+            using (var pen = new Pen(borderColor, 1f))
             {
-                using var pen = new Pen(borderColor, 1f);
                 g.DrawPath(pen, path);
             }
 
@@ -241,28 +364,73 @@ namespace XeroxGo.PrinterAgent.UI
         }
     }
 
+    /// <summary>
+    /// Executive-grade auto-sizing status capsule with state-tinted background and pulse dot.
+    /// </summary>
     public class FluentStatusBadge : Control
     {
-        private string _statusText = "Idle";
+        private string _statusText = "Connected to Cloud";
         private Color _dotColor = FluentTheme.Success;
+        private Color _badgeBg = Color.FromArgb(240, 253, 244);     // Emerald 50
+        private Color _badgeBorder = Color.FromArgb(187, 247, 208); // Emerald 200
+        private Color _badgeText = Color.FromArgb(22, 101, 52);     // Emerald 800
 
         public FluentStatusBadge()
         {
             SetStyle(ControlStyles.AllPaintingInWmPaint | ControlStyles.UserPaint | ControlStyles.OptimizedDoubleBuffer, true);
-            Size = new Size(140, 28);
-            Font = FluentTheme.Font(9f, FontStyle.Regular);
+            Height = 28;
+            Width = 160;
+            Font = FluentTheme.Font(8.5f, FontStyle.Regular);
         }
 
         public void SetStatus(string text, string state)
         {
-            _statusText = text;
-            _dotColor = state.ToLowerInvariant() switch
+            _statusText = string.IsNullOrWhiteSpace(text) ? "Connected" : text;
+
+            switch (state.ToLowerInvariant())
             {
-                "printing" => FluentTheme.Success,
-                "paused" => FluentTheme.Warning,
-                "offline" or "error" => FluentTheme.Danger,
-                _ => Color.FromArgb(59, 130, 246) // Blue
-            };
+                case "printing":
+                    _dotColor = FluentTheme.Success;
+                    _badgeBg = Color.FromArgb(240, 253, 244);
+                    _badgeBorder = Color.FromArgb(187, 247, 208);
+                    _badgeText = Color.FromArgb(22, 101, 52);
+                    break;
+                case "paused":
+                    _dotColor = FluentTheme.Warning;
+                    _badgeBg = Color.FromArgb(254, 252, 232);
+                    _badgeBorder = Color.FromArgb(254, 240, 138);
+                    _badgeText = Color.FromArgb(133, 77, 14);
+                    break;
+                case "offline":
+                case "error":
+                    _dotColor = FluentTheme.Danger;
+                    _badgeBg = Color.FromArgb(254, 242, 242);
+                    _badgeBorder = Color.FromArgb(254, 202, 202);
+                    _badgeText = Color.FromArgb(153, 27, 27);
+                    break;
+                default:
+                    _dotColor = Color.FromArgb(37, 99, 235);
+                    _badgeBg = Color.FromArgb(239, 246, 255);
+                    _badgeBorder = Color.FromArgb(191, 219, 254);
+                    _badgeText = Color.FromArgb(30, 64, 175);
+                    break;
+            }
+
+            // Auto-size width to accommodate text comfortably
+            using var g = CreateGraphics();
+            var textSize = TextRenderer.MeasureText(g, _statusText, Font);
+            int newWidth = Math.Max(120, textSize.Width + 34);
+
+            if (Width != newWidth)
+            {
+                int diff = newWidth - Width;
+                Width = newWidth;
+                if (Parent != null && Anchor.HasFlag(AnchorStyles.Right))
+                {
+                    Left -= diff;
+                }
+            }
+
             Invalidate();
         }
 
@@ -270,32 +438,34 @@ namespace XeroxGo.PrinterAgent.UI
         {
             var g = e.Graphics;
             g.SmoothingMode = SmoothingMode.AntiAlias;
+            g.PixelOffsetMode = PixelOffsetMode.HighQuality;
 
             var rect = new Rectangle(0, 0, Width - 1, Height - 1);
             using var path = FluentTheme.CreateRoundedPath(rect, Height / 2);
 
-            // Background pill
-            using var bgBrush = new SolidBrush(Color.FromArgb(241, 245, 249));
+            // Tinted pill background
+            using var bgBrush = new SolidBrush(_badgeBg);
             g.FillPath(bgBrush, path);
 
-            using var borderPen = new Pen(FluentTheme.CardBorder, 1f);
+            // Subtle border
+            using var borderPen = new Pen(_badgeBorder, 1f);
             g.DrawPath(borderPen, path);
 
-            // Dot
-            int dotSize = 8;
+            // Status Indicator Dot
+            int dotSize = 7;
             int dotY = (Height - dotSize) / 2;
             using var dotBrush = new SolidBrush(_dotColor);
-            g.FillEllipse(dotBrush, 12, dotY, dotSize, dotSize);
+            g.FillEllipse(dotBrush, 10, dotY, dotSize, dotSize);
 
-            // Text
-            var textRect = new Rectangle(24, 0, Width - 30, Height);
+            // Status Text
+            var textRect = new Rectangle(22, 0, Width - 30, Height);
             TextRenderer.DrawText(
                 g,
                 _statusText,
                 Font,
                 textRect,
-                FluentTheme.TextPrimary,
-                TextFormatFlags.Left | TextFormatFlags.VerticalCenter | TextFormatFlags.EndEllipsis
+                _badgeText,
+                TextFormatFlags.Left | TextFormatFlags.VerticalCenter | TextFormatFlags.SingleLine | TextFormatFlags.EndEllipsis
             );
         }
     }
