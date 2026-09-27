@@ -54,7 +54,7 @@ namespace XeroxGo.PrinterAgent.UI
 
             Text = string.Empty;
             ShowIcon = false;
-            ClientSize = new Size(560, 638);
+            ClientSize = new Size(560, 644);
             FormBorderStyle = FormBorderStyle.FixedDialog;
             MaximizeBox = false;
             MinimizeBox = false;
@@ -78,14 +78,14 @@ namespace XeroxGo.PrinterAgent.UI
             _headerPanel = new Panel
             {
                 Location = new Point(marginX, currentY),
-                Size = new Size(contentWidth, 36),
+                Size = new Size(contentWidth, 42),
                 BackColor = FluentTheme.Background
             };
 
             // Official XeroxGo Logo (Transparent Emblem)
             var logoBox = new PictureBox
             {
-                Location = new Point(0, 2),
+                Location = new Point(0, 4),
                 Size = new Size(63, 32),
                 BackColor = Color.Transparent
             };
@@ -109,25 +109,34 @@ namespace XeroxGo.PrinterAgent.UI
             };
             _headerPanel.Controls.Add(logoBox);
 
-            // Title
+            // Title & Subtitle
             var lblTitle = new Label
             {
                 Text = "XeroxGo Agent",
-                Font = FluentTheme.Font(14f, FontStyle.Bold),
+                Font = FluentTheme.Font(13f, FontStyle.Bold),
                 ForeColor = FluentTheme.TextPrimary,
-                Location = new Point(74, 6),
+                Location = new Point(74, 2),
+                AutoSize = true
+            };
+            var lblSubtitle = new Label
+            {
+                Text = "By Unnamed Enterprises",
+                Font = FluentTheme.Font(8.5f),
+                ForeColor = FluentTheme.TextSecondary,
+                Location = new Point(74, 24),
                 AutoSize = true
             };
             _headerPanel.Controls.Add(lblTitle);
+            _headerPanel.Controls.Add(lblSubtitle);
 
             // Status Badge (Top Right)
             _statusBadge = new FluentStatusBadge();
             _statusBadge.SetStatus(currentStatus, statusState);
-            _statusBadge.Location = new Point(contentWidth - _statusBadge.Width, 4);
+            _statusBadge.Location = new Point(contentWidth - _statusBadge.Width, 7);
             _headerPanel.Controls.Add(_statusBadge);
 
             Controls.Add(_headerPanel);
-            currentY += 48;
+            currentY += 54;
 
             // ==========================================
             // 2. Card 1: Cloud Backend
