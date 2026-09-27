@@ -467,5 +467,17 @@ namespace XeroxGo.PrinterAgent.UI
             DialogResult = DialogResult.OK;
             Close();
         }
+
+        public void UpdateStatus(string text, string state)
+        {
+            if (InvokeRequired)
+            {
+                BeginInvoke(new Action(() => UpdateStatus(text, state)));
+                return;
+            }
+            _statusBadge.SetStatus(text, state);
+        }
+
+        public void UpdateStatusPill(string text, string state) => UpdateStatus(text, state);
     }
 }

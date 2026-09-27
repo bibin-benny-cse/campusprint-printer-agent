@@ -122,12 +122,9 @@ namespace XeroxGo.PrinterAgent.UI
             _trayIcon.Text = $"XeroxGo: {status} ({printerName})".Substring(0, Math.Min(63, $"XeroxGo: {status} ({printerName})".Length));
 
             // Sync open SettingsWindow in real-time
-            if (_settingsWindow != null && _settingsWindow.IsLoaded)
+            if (_settingsWindow != null && !_settingsWindow.IsDisposed && _settingsWindow.Visible)
             {
-                _settingsWindow.Dispatcher.Invoke(() =>
-                {
-                    _settingsWindow.UpdateStatusPill(_currentStatusText, _currentStatusState);
-                });
+                _settingsWindow.UpdateStatus(_currentStatusText, _currentStatusState);
             }
         }
 
