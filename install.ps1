@@ -242,8 +242,11 @@ function Invoke-InstallOrUpdate {
     Write-Host ""
 
     # 5. Launch installer
-    $installArgs = if ($Silent) { @("/SILENT", "/VERYSILENT", "/SUPPRESSMSGBOXES") } else { @() }
-    Start-Process -FilePath $installerPath -ArgumentList $installArgs
+    if ($Silent) {
+        Start-Process -FilePath $installerPath -ArgumentList "/SILENT", "/VERYSILENT", "/SUPPRESSMSGBOXES"
+    } else {
+        Start-Process -FilePath $installerPath
+    }
 }
 
 # Determine Action
