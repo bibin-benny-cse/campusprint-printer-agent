@@ -8,37 +8,17 @@ A high-reliability, native Windows System Tray application designed for unattend
 
 ---
 
-## ⚡ Quick Install & Clean Uninstall (Recommended)
+## ⚡ Quick Start
 
-### 📥 Install or Update
-Run this one-line command in **Windows PowerShell** to automatically download, verify, and launch the installer:
+### 📥 1-Click Installation
+1. Download the official installer: **[XeroxGoAgent-Setup.exe](https://github.com/bibin-benny-cse/campusprint-printer-agent/releases/latest/download/XeroxGoAgent-Setup.exe)**
+2. Run the setup wizard to install into your Windows user profile (`%LOCALAPPDATA%\Programs\XeroxGo Agent`).
+   - **Zero Dependencies:** Fully self-contained (47 MB). No external .NET runtimes or administrator rights required.
+   - Automatically sets up system tray integration and optional Windows startup launch.
 
-```powershell
-irm https://raw.githubusercontent.com/bibin-benny-cse/campusprint-printer-agent/main/install.ps1 | iex
-```
-*(Seamless installation with zero Smart App Control friction.)*
-
-### 🗑️ Full Clean Uninstall
-The same script cleanly purges all processes, local configs, logs, shortcuts, and publisher certificates:
-- **Interactive:** Simply run the command above on an installed machine and choose option **[2] Full Clean Uninstall**.
-- **Or Direct Command:**
-  ```powershell
-  & ([scriptblock]::Create((irm https://raw.githubusercontent.com/bibin-benny-cse/campusprint-printer-agent/main/install.ps1))) -Uninstall
-  ```
-*(Leaves zero residual files, registry keys, or certificates on the system.)*
-
----
-
-## 📦 Manual Downloads & Releases
-
-Get pre-compiled binaries from the **[Releases Page](https://github.com/bibin-benny-cse/campusprint-printer-agent/releases/latest)**:
-
-| Asset | Format | Recommended For | Direct Download |
-| :--- | :--- | :--- | :--- |
-| **`XeroxGoAgent-Setup.exe`** | 1-Click Installer | Shopkeepers & Counter PCs (includes Start Menu shortcuts & auto-updater hooks) | [Download Installer](https://github.com/bibin-benny-cse/campusprint-printer-agent/releases/latest/download/XeroxGoAgent-Setup.exe) |
-| **`XeroxGo-Publisher-Certificate.cer`** | Publisher Certificate | Root certificate for automated or manual security trust | [Download Certificate](https://github.com/bibin-benny-cse/campusprint-printer-agent/releases/latest/download/XeroxGo-Publisher-Certificate.cer) |
-
-> **Zero Dependencies:** The installer is fully self-contained. The print shop computer **does not** require .NET 8 or any external runtimes installed.
+### 🗑️ Uninstallation
+To uninstall, simply use standard Windows Application management:
+- Go to **Windows Settings $\rightarrow$ Apps $\rightarrow$ Installed apps $\rightarrow$ XeroxGo Agent $\rightarrow$ Uninstall**.
 
 ---
 
