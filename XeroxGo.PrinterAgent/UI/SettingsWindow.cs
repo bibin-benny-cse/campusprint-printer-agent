@@ -132,10 +132,10 @@ namespace XeroxGo.PrinterAgent.UI
             };
             _headerPanel.Controls.Add(logoBox);
 
-            // Status Badge (Top Right)
+            // Status Badge (Top Right) - vertically centered with XG logo (center Y = 19)
             _statusBadge = new FluentStatusBadge();
             _statusBadge.SetStatus(currentStatus, statusState);
-            _statusBadge.Location = new Point(contentWidth - _statusBadge.Width, 6);
+            _statusBadge.Location = new Point(contentWidth - _statusBadge.Width, 5);
             _headerPanel.Controls.Add(_statusBadge);
 
             Controls.Add(_headerPanel);
@@ -513,7 +513,7 @@ namespace XeroxGo.PrinterAgent.UI
             if (_headerPanel != null)
             {
                 int contentWidth = ClientSize.Width - (24 * 2);
-                _statusBadge.Location = new Point(contentWidth - _statusBadge.Width, 13);
+                _statusBadge.Location = new Point(contentWidth - _statusBadge.Width, 5);
             }
         }
 
