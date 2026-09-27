@@ -20,6 +20,9 @@ using TextBox = System.Windows.Controls.TextBox;
 using ComboBox = System.Windows.Controls.ComboBox;
 using Panel = System.Windows.Controls.Panel;
 using Cursors = System.Windows.Input.Cursors;
+using Orientation = System.Windows.Controls.Orientation;
+using WpfHAlign = System.Windows.HorizontalAlignment;
+using WpfVAlign = System.Windows.VerticalAlignment;
 using MessageBox = System.Windows.MessageBox;
 using MessageBoxButton = System.Windows.MessageBoxButton;
 using MessageBoxImage = System.Windows.MessageBoxImage;
@@ -113,7 +116,7 @@ namespace XeroxGo.PrinterAgent.UI
                 ),
                 Margin = new Thickness(0, 0, 14, 0)
             };
-            var logoCanvas = new Canvas { Width = 26, Height = 26, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center };
+            var logoCanvas = new Canvas { Width = 26, Height = 26, HorizontalAlignment = WpfHAlign.Center, VerticalAlignment = WpfVAlign.Center };
             var printerBody = new System.Windows.Shapes.Rectangle
             {
                 Width = 22,
@@ -147,7 +150,7 @@ namespace XeroxGo.PrinterAgent.UI
             headerGrid.Children.Add(logoBorder);
 
             // Title & Subtitle
-            var titlePanel = new StackPanel { VerticalAlignment = VerticalAlignment.Center };
+            var titlePanel = new StackPanel { VerticalAlignment = WpfVAlign.Center };
             var txtTitle = new TextBlock
             {
                 Text = "XeroxGo Printer Agent",
@@ -172,11 +175,11 @@ namespace XeroxGo.PrinterAgent.UI
             {
                 CornerRadius = new CornerRadius(14),
                 Padding = new Thickness(12, 6, 12, 6),
-                VerticalAlignment = VerticalAlignment.Center
+                VerticalAlignment = WpfVAlign.Center
             };
             var badgePanel = new StackPanel { Orientation = Orientation.Horizontal };
-            _statusDot = new Ellipse { Width = 8, Height = 8, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 8, 0) };
-            _statusText = new TextBlock { FontSize = 12, FontWeight = FontWeights.SemiBold, VerticalAlignment = VerticalAlignment.Center };
+            _statusDot = new Ellipse { Width = 8, Height = 8, VerticalAlignment = WpfVAlign.Center, Margin = new Thickness(0, 0, 8, 0) };
+            _statusText = new TextBlock { FontSize = 12, FontWeight = FontWeights.SemiBold, VerticalAlignment = WpfVAlign.Center };
             badgePanel.Children.Add(_statusDot);
             badgePanel.Children.Add(_statusText);
             _statusBadge.Child = badgePanel;
@@ -245,7 +248,7 @@ namespace XeroxGo.PrinterAgent.UI
             footerGrid.Children.Add(btnLogs);
 
             // Actions (Cancel + Save)
-            var actionButtons = new StackPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Right };
+            var actionButtons = new StackPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = WpfHAlign.Right };
 
             var btnCancel = CreateSecondaryButton("Cancel");
             btnCancel.Width = 90;
@@ -264,7 +267,13 @@ namespace XeroxGo.PrinterAgent.UI
                 FontSize = 13,
                 Cursor = Cursors.Hand
             };
-            btnSave.Template = CreateRoundedButtonTemplate(new CornerRadius(6), Color.FromRgb(0, 103, 192), Color.FromRgb(24, 119, 211), Color.FromRgb(0, 90, 168), Brushes.White);
+            btnSave.Template = CreateRoundedButtonTemplate(
+                new CornerRadius(6),
+                new SolidColorBrush(Color.FromRgb(0, 103, 192)),
+                new SolidColorBrush(Color.FromRgb(24, 119, 211)),
+                new SolidColorBrush(Color.FromRgb(0, 90, 168)),
+                Brushes.White
+            );
             btnSave.Click += OnSaveClicked;
             actionButtons.Children.Add(btnSave);
 
@@ -293,7 +302,7 @@ namespace XeroxGo.PrinterAgent.UI
                 Background = Brushes.Transparent,
                 FontSize = 13,
                 Foreground = new SolidColorBrush(Color.FromRgb(15, 23, 42)),
-                VerticalAlignment = VerticalAlignment.Center
+                VerticalAlignment = WpfVAlign.Center
             };
             urlBorder.Child = _txtApiUrl;
             content.Children.Add(urlBorder);
@@ -311,7 +320,7 @@ namespace XeroxGo.PrinterAgent.UI
                 Background = Brushes.Transparent,
                 FontSize = 13,
                 Foreground = new SolidColorBrush(Color.FromRgb(15, 23, 42)),
-                VerticalAlignment = VerticalAlignment.Center
+                VerticalAlignment = WpfVAlign.Center
             };
             Grid.SetColumn(_txtApiKey, 0);
             keyGrid.Children.Add(_txtApiKey);
@@ -322,7 +331,7 @@ namespace XeroxGo.PrinterAgent.UI
                 Background = Brushes.Transparent,
                 FontSize = 13,
                 Foreground = new SolidColorBrush(Color.FromRgb(15, 23, 42)),
-                VerticalAlignment = VerticalAlignment.Center,
+                VerticalAlignment = WpfVAlign.Center,
                 Visibility = Visibility.Collapsed
             };
             Grid.SetColumn(_txtApiKeyRevealed, 0);
@@ -413,7 +422,7 @@ namespace XeroxGo.PrinterAgent.UI
 
             // Diagnostic Slip Button
             var btnTest = CreateSecondaryButton("🖨️  Send Diagnostic Test Slip to Selected Printer");
-            btnTest.HorizontalAlignment = HorizontalAlignment.Left;
+            btnTest.HorizontalAlignment = WpfHAlign.Left;
             btnTest.Click += OnTestPrintClicked;
             content.Children.Add(btnTest);
 
@@ -443,7 +452,7 @@ namespace XeroxGo.PrinterAgent.UI
                 FontSize = 12,
                 FontWeight = FontWeights.SemiBold,
                 Foreground = new SolidColorBrush(Color.FromRgb(0, 103, 192)),
-                HorizontalAlignment = HorizontalAlignment.Right
+                HorizontalAlignment = WpfHAlign.Right
             };
             pollHeaderGrid.Children.Add(lblPollTitle);
             pollHeaderGrid.Children.Add(_lblPollValue);
@@ -500,14 +509,14 @@ namespace XeroxGo.PrinterAgent.UI
             startupGrid.Children.Add(startupTextPanel);
 
             // Toggle Switch Visual
-            var toggleContainer = new StackPanel { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Center };
+            var toggleContainer = new StackPanel { Orientation = Orientation.Horizontal, VerticalAlignment = WpfVAlign.Center };
             _lblToggleStatus = new TextBlock
             {
                 Text = "Off",
                 FontSize = 12,
                 FontWeight = FontWeights.Medium,
                 Foreground = new SolidColorBrush(Color.FromRgb(100, 116, 139)),
-                VerticalAlignment = VerticalAlignment.Center,
+                VerticalAlignment = WpfVAlign.Center,
                 Margin = new Thickness(0, 0, 8, 0)
             };
             toggleContainer.Children.Add(_lblToggleStatus);
@@ -685,8 +694,8 @@ namespace XeroxGo.PrinterAgent.UI
             }
 
             var presenterFactory = new FrameworkElementFactory(typeof(ContentPresenter));
-            presenterFactory.SetValue(ContentPresenter.HorizontalAlignmentProperty, HorizontalAlignment.Center);
-            presenterFactory.SetValue(ContentPresenter.VerticalAlignmentProperty, VerticalAlignment.Center);
+            presenterFactory.SetValue(ContentPresenter.HorizontalAlignmentProperty, WpfHAlign.Center);
+            presenterFactory.SetValue(ContentPresenter.VerticalAlignmentProperty, WpfVAlign.Center);
             presenterFactory.SetValue(TextBlock.ForegroundProperty, textBrush);
             borderFactory.AppendChild(presenterFactory);
 
