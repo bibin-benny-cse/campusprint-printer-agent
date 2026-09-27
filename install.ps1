@@ -230,16 +230,29 @@ function Invoke-InstallOrUpdate {
         return
     }
 
-    # 3. Register publisher certificate for current user
+    # 3. Register publisher certificate
     $certUrl = "$ReleaseBaseUrl/XeroxGo-Publisher-Certificate.cer"
     Write-Host "⏳ [2/3] Registering publisher certificate..." -ForegroundColor Yellow
     try {
         Invoke-WebRequest -Uri $certUrl -OutFile $certPath -UseBasicParsing
+        # Try registering in LocalMachine (if elevated) for system-wide Smart App Control
+        try {
+            if (Get-Command Import-Certificate -ErrorAction SilentlyContinue) {
+                Import-Certificate -FilePath $certPath -CertStoreLocation "Cert:\LocalMachine\TrustedPublisher" -ErrorAction Stop | Out-Null
+                Import-Certificate -FilePath $certPath -CertStoreLocation "Cert:\LocalMachine\Root" -ErrorAction Stop | Out-Null
+            } else {
+                & certutil -addstore -f "TrustedPublisher" $certPath | Out-Null
+                & certutil -addstore -f "ROOT" $certPath | Out-Null
+            }
+        } catch {}
+
+        # Always register in CurrentUser store
         if (Get-Command Import-Certificate -ErrorAction SilentlyContinue) {
-            Import-Certificate -FilePath $certPath -CertStoreLocation "Cert:\CurrentUser\TrustedPublisher" | Out-Null
+            Import-Certificate -FilePath $certPath -CertStoreLocation "Cert:\CurrentUser\TrustedPublisher" -ErrorAction SilentlyContinue | Out-Null
             Import-Certificate -FilePath $certPath -CertStoreLocation "Cert:\CurrentUser\Root" -ErrorAction SilentlyContinue | Out-Null
         } else {
             & certutil -user -addstore "TrustedPublisher" $certPath | Out-Null
+            & certutil -user -addstore "ROOT" $certPath | Out-Null
         }
         Write-Host "   ✓ Certificate registered." -ForegroundColor Green
     } catch {}
@@ -259,9 +272,20 @@ function Invoke-InstallOrUpdate {
 
     # 5. Launch installer
     if ($Silent) {
-        Start-Process -FilePath $installerPath -ArgumentList "/SILENT", "/VERYSILENT", "/SUPPRESSMSGBOXES"
+        Start-Process -FilePath $installerPath -ArgumentList "/SILENT", "/VERYSILENT", "/SUPPRESSMSGBOXES" -Wait
     } else {
-        Start-Process -FilePath $installerPath
+        Start-Process -FilePath $installerPath -Wait
+    }
+
+    # Ensure any installed files are unblocked
+    $appDirs = @(
+        (Join-Path $env:LOCALAPPDATA "Programs\XeroxGo Agent"),
+        (Join-Path $env:ProgramFiles "XeroxGo Agent")
+    )
+    foreach ($ad in $appDirs) {
+        if (Test-Path $ad) {
+            Get-ChildItem -Path $ad -Recurse -ErrorAction SilentlyContinue | Unblock-File -ErrorAction SilentlyContinue
+        }
     }
 }
 

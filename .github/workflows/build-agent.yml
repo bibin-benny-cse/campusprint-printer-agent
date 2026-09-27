@@ -30,23 +30,14 @@ jobs:
         run: |
           dotnet publish XeroxGo.PrinterAgent/XeroxGo.PrinterAgent.csproj -c Release -r win-x64 --self-contained -p:PublishSingleFile=true
 
-      - name: Generate Code Signing Certificate & Sign Standalone EXE
+      - name: Sign Standalone EXE with Persistent Certificate
         shell: pwsh
         run: |
-          # 1. Generate Authenticode Code Signing Certificate for XeroxGo Technologies
-          $cert = New-SelfSignedCertificate -Type CodeSigningCert -Subject "CN=XeroxGo Technologies, O=XeroxGo Technologies, C=US" -KeyUsage DigitalSignature -FriendlyName "XeroxGo Publisher Certificate" -CertStoreLocation "Cert:\CurrentUser\My" -NotAfter (Get-Date).AddYears(5)
-          $password = ConvertTo-SecureString -String "XeroxGo2026!" -Force -AsPlainText
-          
-          # 2. Export PFX and public CER
-          New-Item -ItemType Directory -Force -Path "certs"
-          Export-PfxCertificate -Cert $cert -FilePath "certs\XeroxGoCert.pfx" -Password $password
-          Export-Certificate -Cert $cert -FilePath "certs\XeroxGo-Publisher-Certificate.cer"
-          
-          # 3. Locate Microsoft SignTool (x64) from Windows SDK
+          # 1. Locate Microsoft SignTool (x64) from Windows SDK
           $signtool = (Get-ChildItem -Path "C:\Program Files (x86)\Windows Kits\10\bin" -Filter "signtool.exe" -Recurse | Where-Object { $_.FullName -match "\\x64\\signtool\.exe$" } | Select-Object -First 1).FullName
           Write-Host "Located SignTool at: $signtool"
           
-          # 4. Sign standalone executable with RFC 3161 timestamp
+          # 2. Sign standalone executable with RFC 3161 timestamp
           $exePath = "XeroxGo.PrinterAgent/bin/Release/net8.0-windows/win-x64/publish/XeroxGo.PrinterAgent.exe"
           & $signtool sign /f "certs\XeroxGoCert.pfx" /p "XeroxGo2026!" /fd SHA256 /tr http://timestamp.digicert.com /td SHA256 $exePath
           Write-Host "Successfully signed $exePath"
