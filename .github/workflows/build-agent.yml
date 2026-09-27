@@ -89,6 +89,7 @@ jobs:
             certs/XeroxGo-Publisher-Certificate.cer
             XeroxGo.PrinterAgent/Installer/Trust-Publisher.bat
             install.ps1
+            uninstall.ps1
           draft: false
           prerelease: false
           generate_release_notes: true

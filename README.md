@@ -8,14 +8,23 @@ A high-reliability, native Windows System Tray application designed for unattend
 
 ---
 
-## ⚡ Quick Install (Recommended)
+## ⚡ Quick Install & Uninstall (Recommended)
 
+### 📥 Install or Update
 Run this one-line command in **Windows PowerShell** to automatically download, verify, and launch the installer:
 
 ```powershell
 irm https://raw.githubusercontent.com/bibin-benny-cse/campusprint-printer-agent/main/install.ps1 | iex
 ```
 *(Seamless installation with zero Smart App Control friction.)*
+
+### 🗑️ Full & Clean Uninstall
+To completely remove the agent, running processes, local configs, logs, shortcuts, and publisher certificates:
+
+```powershell
+irm https://raw.githubusercontent.com/bibin-benny-cse/campusprint-printer-agent/main/uninstall.ps1 | iex
+```
+*(Leaves zero residual files or registry keys on the system.)*
 
 ---
 
