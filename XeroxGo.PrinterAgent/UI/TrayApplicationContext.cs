@@ -139,16 +139,7 @@ namespace XeroxGo.PrinterAgent.UI
 
         private void OnOpenSettings(object? sender, EventArgs e)
         {
-            // Lazily initialize WPF runtime only when user opens settings
-            if (System.Windows.Application.Current == null)
-            {
-                _ = new System.Windows.Application
-                {
-                    ShutdownMode = System.Windows.ShutdownMode.OnExplicitShutdown
-                };
-            }
-
-            if (_settingsWindow == null || !_settingsWindow.IsLoaded)
+            if (_settingsWindow == null || _settingsWindow.IsDisposed)
             {
                 _settingsWindow = new SettingsWindow(
                     _config,
@@ -159,19 +150,18 @@ namespace XeroxGo.PrinterAgent.UI
                     _currentStatusText,
                     _currentStatusState
                 );
-                _settingsWindow.Closed += (s, ev) =>
+                _settingsWindow.FormClosed += (s, ev) =>
                 {
                     _settingsWindow = null;
-                    // Flush WPF memory allocations back to OS
                     MemoryOptimizer.TrimMemory();
                 };
             }
 
-            _settingsWindow.Show();
-            if (_settingsWindow.WindowState == System.Windows.WindowState.Minimized)
+            if (_settingsWindow.WindowState == FormWindowState.Minimized)
             {
-                _settingsWindow.WindowState = System.Windows.WindowState.Normal;
+                _settingsWindow.WindowState = FormWindowState.Normal;
             }
+            _settingsWindow.Show();
             _settingsWindow.Activate();
         }
 

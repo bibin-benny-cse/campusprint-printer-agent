@@ -21,8 +21,9 @@ namespace XeroxGo.PrinterAgent.Services
         {
             try
             {
-                // 1. Run low-pause garbage collection to release temporary buffers & PDF objects
-                GC.Collect(GC.MaxGeneration, GCCollectionMode.Forced, false, false);
+                // 1. Run low-pause garbage collection and compact LOH (reclaims PDF buffers)
+                System.Runtime.GCSettings.LargeObjectHeapCompactionMode = System.Runtime.GCLargeObjectHeapCompactionMode.CompactOnce;
+                GC.Collect(GC.MaxGeneration, GCCollectionMode.Forced, false, true);
                 GC.WaitForPendingFinalizers();
 
                 // 2. Request Windows Memory Manager to flush unreferenced working-set pages

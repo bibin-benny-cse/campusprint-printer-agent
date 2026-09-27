@@ -5,7 +5,6 @@
     <TargetFramework>net8.0-windows</TargetFramework>
     <Nullable>enable</Nullable>
     <UseWindowsForms>true</UseWindowsForms>
-    <UseWPF>true</UseWPF>
     <ImplicitUsings>enable</ImplicitUsings>
     <ApplicationIcon></ApplicationIcon>
     <ApplicationManifest>app.manifest</ApplicationManifest>
@@ -19,16 +18,21 @@
     <Product>XeroxGo Agent</Product>
     <Company>XeroxGo Technologies</Company>
     
-    <!-- Self-Contained Single-File Publish Configuration -->
+    <!-- Self-Contained Single-File Publish Configuration with Trimming -->
     <PublishSingleFile>true</PublishSingleFile>
     <SelfContained>true</SelfContained>
     <RuntimeIdentifier>win-x64</RuntimeIdentifier>
-    <PublishTrimmed>false</PublishTrimmed>
+    <PublishTrimmed>true</PublishTrimmed>
+    <TrimMode>partial</TrimMode>
 
-    <!-- Memory Optimization for Client/Tray Services (Forces Workstation GC and trims segment bloat) -->
+    <!-- Extreme Memory Optimization for 24/7 Background Tray Daemon -->
+    <!-- Enable .NET 8 DATAS (Dynamic Adaptation to Application Sizes) -->
+    <GarbageCollectionAdaptationMode>1</GarbageCollectionAdaptationMode>
     <ServerGarbageCollection>false</ServerGarbageCollection>
     <ConcurrentGarbageCollection>true</ConcurrentGarbageCollection>
     <RetainVMGarbageCollection>false</RetainVMGarbageCollection>
+    <!-- Cap GC Heap for low-footprint desktop agent (32 MB) -->
+    <DOTNET_GCHeapHardLimit>0x2000000</DOTNET_GCHeapHardLimit>
   </PropertyGroup>
 
   <ItemGroup>

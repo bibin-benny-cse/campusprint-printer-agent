@@ -11,6 +11,7 @@ namespace XeroxGo.PrinterAgent.Services
 {
     public class ApiClient
     {
+        private static readonly HttpClient s_cdnClient = new HttpClient { Timeout = TimeSpan.FromSeconds(60) };
         private readonly HttpClient _http;
         private readonly string _baseUrl;
 
@@ -94,8 +95,7 @@ namespace XeroxGo.PrinterAgent.Services
                 // Prefer direct CDN URL if provided by Supabase Storage
                 if (!string.IsNullOrWhiteSpace(job.FileUrl) && Uri.IsWellFormedUriString(job.FileUrl, UriKind.Absolute))
                 {
-                    using var cdnClient = new HttpClient { Timeout = TimeSpan.FromSeconds(30) };
-                    using var stream = await cdnClient.GetStreamAsync(job.FileUrl);
+                    using var stream = await s_cdnClient.GetStreamAsync(job.FileUrl);
                     using var fileStream = new FileStream(destPath, FileMode.Create, FileAccess.Write, FileShare.None);
                     await stream.CopyToAsync(fileStream);
                     return destPath;

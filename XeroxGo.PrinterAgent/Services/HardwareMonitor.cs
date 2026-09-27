@@ -2,7 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Drawing.Printing;
 using System.Linq;
-using System.Printing;
+using System.Runtime.InteropServices;
 
 namespace XeroxGo.PrinterAgent.Services
 {
@@ -20,6 +20,55 @@ namespace XeroxGo.PrinterAgent.Services
 
     public static class HardwareMonitor
     {
+        #region Win32 Spooler Native Interop (Zero COM Overhead)
+        [DllImport("winspool.drv", CharSet = CharSet.Auto, SetLastError = true)]
+        private static extern bool OpenPrinter(string pPrinterName, out IntPtr phPrinter, IntPtr pDefault);
+
+        [DllImport("winspool.drv", SetLastError = true)]
+        private static extern bool ClosePrinter(IntPtr hPrinter);
+
+        [DllImport("winspool.drv", CharSet = CharSet.Auto, SetLastError = true)]
+        private static extern bool GetPrinter(IntPtr hPrinter, int dwLevel, IntPtr pPrinter, int cbBuf, out int pcbNeeded);
+
+        [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Auto)]
+        private struct PRINTER_INFO_2
+        {
+            public string pServerName;
+            public string pPrinterName;
+            public string pShareName;
+            public string pPortName;
+            public string pDriverName;
+            public string pComment;
+            public string pLocation;
+            public IntPtr pDevMode;
+            public string pSepFile;
+            public string pPrintProcessor;
+            public string pDatatype;
+            public string pParameters;
+            public IntPtr pSecurityDescriptor;
+            public uint Attributes;
+            public uint Priority;
+            public uint DefaultPriority;
+            public uint StartTime;
+            public uint UntilTime;
+            public uint Status;
+            public uint cJobs;
+            public uint AveragePPM;
+        }
+
+        private const uint PRINTER_STATUS_PAUSED = 0x00000001;
+        private const uint PRINTER_STATUS_ERROR = 0x00000002;
+        private const uint PRINTER_STATUS_PAPER_JAM = 0x00000008;
+        private const uint PRINTER_STATUS_PAPER_OUT = 0x00000010;
+        private const uint PRINTER_STATUS_OFFLINE = 0x00000080;
+        private const uint PRINTER_STATUS_BUSY = 0x00000200;
+        private const uint PRINTER_STATUS_PRINTING = 0x00000400;
+        private const uint PRINTER_STATUS_NOT_AVAILABLE = 0x00001000;
+        private const uint PRINTER_STATUS_DOOR_OPEN = 0x00400000;
+
+        private const uint PRINTER_ATTRIBUTE_WORK_OFFLINE = 0x00000400;
+        #endregion
+
         private static readonly string[] VirtualKeywords = new[]
         {
             "microsoft print to pdf",
@@ -97,63 +146,100 @@ namespace XeroxGo.PrinterAgent.Services
         }
 
         /// <summary>
-        /// Inspects the native Windows Print Spooler for physical health telemetry.
-        /// Fires critical notification only if an actionable failure (paper jam, out of paper) is detected.
+        /// Inspects the native Windows Print Spooler directly via winspool.drv.
+        /// Zero COM memory allocations, zero WPF overhead.
         /// </summary>
         public static PrinterHealthState CheckPrinterHealth(string printerName)
         {
             var state = new PrinterHealthState { PrinterName = printerName };
 
+            if (string.IsNullOrWhiteSpace(printerName) || IsVirtualPrinter(printerName))
+            {
+                state.StatusSummary = "Idle";
+                state.IsOnline = true;
+                return state;
+            }
+
+            IntPtr hPrinter = IntPtr.Zero;
+            IntPtr pPrinterInfo = IntPtr.Zero;
+
             try
             {
-                using var printServer = new LocalPrintServer();
-                using var queue = printServer.GetPrintQueue(printerName);
+                if (OpenPrinter(printerName, out hPrinter, IntPtr.Zero) && hPrinter != IntPtr.Zero)
+                {
+                    GetPrinter(hPrinter, 2, IntPtr.Zero, 0, out int bytesNeeded);
+                    if (bytesNeeded > 0)
+                    {
+                        pPrinterInfo = Marshal.AllocHGlobal(bytesNeeded);
+                        if (GetPrinter(hPrinter, 2, pPrinterInfo, bytesNeeded, out _))
+                        {
+                            var info = Marshal.PtrToStructure<PRINTER_INFO_2>(pPrinterInfo);
 
-                queue.Refresh();
+                            bool isOffline = (info.Status & PRINTER_STATUS_OFFLINE) != 0 ||
+                                             (info.Status & PRINTER_STATUS_NOT_AVAILABLE) != 0 ||
+                                             (info.Attributes & PRINTER_ATTRIBUTE_WORK_OFFLINE) != 0;
 
-                state.IsOnline = !queue.IsOffline;
-                state.IsPaperJammed = queue.IsPaperJammed;
-                state.IsOutOfPaper = queue.IsOutOfPaper;
-                state.IsPaused = queue.IsPaused;
-                state.IsInError = queue.IsInError;
+                            state.IsOnline = !isOffline;
+                            state.IsPaperJammed = (info.Status & PRINTER_STATUS_PAPER_JAM) != 0;
+                            state.IsOutOfPaper = (info.Status & PRINTER_STATUS_PAPER_OUT) != 0;
+                            state.IsPaused = (info.Status & PRINTER_STATUS_PAUSED) != 0;
+                            state.IsInError = (info.Status & PRINTER_STATUS_ERROR) != 0 || (info.Status & PRINTER_STATUS_DOOR_OPEN) != 0;
 
-                if (state.IsPaperJammed)
-                {
-                    state.StatusSummary = "Error";
-                    state.ErrorMessage = $"Paper jam detected on printer '{printerName}'. Please clear the paper path.";
-                    NotificationService.ShowError("Paper Jam", state.ErrorMessage);
+                            if (state.IsPaperJammed)
+                            {
+                                state.StatusSummary = "Error";
+                                state.ErrorMessage = $"Paper jam detected on printer '{printerName}'. Please clear the paper path.";
+                                NotificationService.ShowError("Paper Jam", state.ErrorMessage);
+                            }
+                            else if (state.IsOutOfPaper)
+                            {
+                                state.StatusSummary = "Error";
+                                state.ErrorMessage = $"Printer '{printerName}' is out of paper. Please reload the tray.";
+                                NotificationService.ShowError("Out of Paper", state.ErrorMessage);
+                            }
+                            else if (!state.IsOnline)
+                            {
+                                state.StatusSummary = "Offline";
+                                state.ErrorMessage = $"Printer '{printerName}' is offline or disconnected.";
+                                NotificationService.ShowError("Printer Offline", state.ErrorMessage);
+                            }
+                            else if (state.IsPaused)
+                            {
+                                state.StatusSummary = "Paused";
+                            }
+                            else if ((info.Status & PRINTER_STATUS_PRINTING) != 0 || (info.Status & PRINTER_STATUS_BUSY) != 0 || info.cJobs > 0)
+                            {
+                                state.StatusSummary = "Printing";
+                            }
+                            else
+                            {
+                                state.StatusSummary = "Idle";
+                            }
+
+                            return state;
+                        }
+                    }
                 }
-                else if (state.IsOutOfPaper)
-                {
-                    state.StatusSummary = "Error";
-                    state.ErrorMessage = $"Printer '{printerName}' is out of paper. Please reload the tray.";
-                    NotificationService.ShowError("Out of Paper", state.ErrorMessage);
-                }
-                else if (!state.IsOnline)
-                {
-                    state.StatusSummary = "Offline";
-                    state.ErrorMessage = $"Printer '{printerName}' is offline or disconnected.";
-                    NotificationService.ShowError("Printer Offline", state.ErrorMessage);
-                }
-                else if (state.IsPaused)
-                {
-                    state.StatusSummary = "Paused";
-                }
-                else if (queue.IsBusy || queue.NumberOfJobs > 0)
-                {
-                    state.StatusSummary = "Printing";
-                }
-                else
-                {
-                    state.StatusSummary = "Idle";
-                }
+
+                state.StatusSummary = "Idle";
+                state.IsOnline = true;
             }
             catch (Exception ex)
             {
-                // Print queue might not be accessible if it's a virtual printer or permissions issue
                 state.StatusSummary = "Idle";
                 state.IsOnline = true;
-                Logger.Warn($"Could not query PrintQueue for '{printerName}': {ex.Message}");
+                Logger.Warn($"Could not query spooler for '{printerName}': {ex.Message}");
+            }
+            finally
+            {
+                if (pPrinterInfo != IntPtr.Zero)
+                {
+                    Marshal.FreeHGlobal(pPrinterInfo);
+                }
+                if (hPrinter != IntPtr.Zero)
+                {
+                    ClosePrinter(hPrinter);
+                }
             }
 
             return state;

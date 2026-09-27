@@ -1,772 +1,390 @@
 using System;
-using System.Diagnostics;
+using System.Drawing;
+using System.Drawing.Drawing2D;
 using System.IO;
-using System.Windows;
-using System.Windows.Controls;
-using System.Windows.Input;
-using System.Windows.Interop;
-using System.Windows.Media;
-using System.Windows.Media.Effects;
-using System.Windows.Shapes;
+using System.Linq;
+using System.Windows.Forms;
 using XeroxGo.PrinterAgent.Models;
 using XeroxGo.PrinterAgent.Services;
 
-using Color = System.Windows.Media.Color;
-using Brush = System.Windows.Media.Brush;
-using Brushes = System.Windows.Media.Brushes;
-using FontFamily = System.Windows.Media.FontFamily;
-using Button = System.Windows.Controls.Button;
-using TextBox = System.Windows.Controls.TextBox;
-using ComboBox = System.Windows.Controls.ComboBox;
-using Panel = System.Windows.Controls.Panel;
-using Cursors = System.Windows.Input.Cursors;
-using Orientation = System.Windows.Controls.Orientation;
-using WpfHAlign = System.Windows.HorizontalAlignment;
-using WpfVAlign = System.Windows.VerticalAlignment;
-using MessageBox = System.Windows.MessageBox;
-using MessageBoxButton = System.Windows.MessageBoxButton;
-using MessageBoxImage = System.Windows.MessageBoxImage;
-
 namespace XeroxGo.PrinterAgent.UI
 {
-    public class SettingsWindow : Window
+    /// <summary>
+    /// Lightweight, modern Windows Forms configuration dialog.
+    /// Uses native GDI+ rendering (zero WPF / DirectX overhead, ~5MB working set).
+    /// </summary>
+    public class SettingsWindow : Form
     {
         private readonly AppConfig _config;
         private readonly Action<AppConfig> _onSaveCallback;
 
         private TextBox _txtApiUrl = null!;
-        private PasswordBox _txtApiKey = null!;
-        private TextBox _txtApiKeyRevealed = null!;
-        private Button _btnToggleKeyVisibility = null!;
+        private TextBox _txtApiKey = null!;
+        private Button _btnToggleKey = null!;
         private bool _isKeyRevealed = false;
 
         private ComboBox _cmbLogicalSlot = null!;
         private ComboBox _cmbPhysicalPrinters = null!;
-        private Slider _sliderPoll = null!;
-        private TextBlock _lblPollValue = null!;
 
-        private Border _togglePill = null!;
-        private Ellipse _toggleThumb = null!;
-        private TextBlock _lblToggleStatus = null!;
-        private bool _isAutoStartEnabled = false;
+        private TrackBar _trackPoll = null!;
+        private Label _lblPollValue = null!;
+        private CheckBox _chkAutoStart = null!;
 
-        private Border _statusBadge = null!;
-        private Ellipse _statusDot = null!;
-        private TextBlock _statusText = null!;
+        private FluentStatusBadge _statusBadge = null!;
+        private FluentButton _btnTestSlip = null!;
+        private FluentButton _btnSave = null!;
+        private FluentButton _btnCancel = null!;
 
         public SettingsWindow(AppConfig config, Action<AppConfig> onSaveCallback, string currentStatus = "Connected to Cloud", string statusState = "idle")
         {
             _config = config;
             _onSaveCallback = onSaveCallback;
 
-            InitializeWindow();
-            BuildLayout(currentStatus, statusState);
+            InitializeComponent(currentStatus, statusState);
             LoadConfiguration();
         }
 
-        protected override void OnSourceInitialized(EventArgs e)
+        protected override void OnHandleCreated(EventArgs e)
         {
-            base.OnSourceInitialized(e);
-            var handle = new WindowInteropHelper(this).Handle;
-            DwmApi.ApplyWindows11Styling(handle);
+            base.OnHandleCreated(e);
+            DwmApi.ApplyWindows11Styling(this.Handle);
         }
 
-        private void InitializeWindow()
+        private void InitializeComponent(string currentStatus, string statusState)
         {
-            Title = "XeroxGo — Agent Settings";
-            Width = 620;
-            Height = 740;
-            MinWidth = 540;
-            MinHeight = 580;
-            WindowStartupLocation = WindowStartupLocation.CenterScreen;
-            Background = new SolidColorBrush(Color.FromRgb(248, 250, 252)); // Slate-50
-            FontFamily = new FontFamily("Segoe UI Variable Text, Segoe UI, sans-serif");
-            UseLayoutRounding = true;
-            SnapsToDevicePixels = true;
-            TextOptions.SetTextFormattingMode(this, TextFormattingMode.Display);
-            TextOptions.SetTextRenderingMode(this, TextRenderingMode.ClearType);
-        }
+            SuspendLayout();
 
-        private void BuildLayout(string currentStatus, string statusState)
-        {
-            var rootGrid = new Grid();
-            rootGrid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto }); // 0: Header
-            rootGrid.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) }); // 1: Scrollable Body
-            rootGrid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto }); // 2: Footer
-            Content = rootGrid;
+            Text = "XeroxGo — Agent Settings";
+            ClientSize = new Size(580, 690);
+            FormBorderStyle = FormBorderStyle.FixedDialog;
+            MaximizeBox = false;
+            MinimizeBox = false;
+            StartPosition = FormStartPosition.CenterScreen;
+            BackColor = FluentTheme.Background;
+            Font = FluentTheme.Font(9.5f);
+            AutoScaleMode = AutoScaleMode.Dpi;
+
+            int currentY = 16;
+            int marginX = 24;
+            int contentWidth = ClientSize.Width - (marginX * 2);
 
             // ==========================================
-            // Row 0: Modern Header
+            // 1. Header (Logo + Title + Status Badge)
             // ==========================================
-            var headerGrid = new Grid { Margin = new Thickness(28, 24, 28, 16) };
-            headerGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-            headerGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-            headerGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+            var headerPanel = new Panel
+            {
+                Location = new Point(marginX, currentY),
+                Size = new Size(contentWidth, 52),
+                BackColor = Color.Transparent
+            };
 
-            // App Icon
-            var logoBorder = new Border
+            // Modern Blue Logo Icon
+            var logoBox = new PictureBox
             {
-                Width = 44,
-                Height = 44,
-                CornerRadius = new CornerRadius(10),
-                Background = new LinearGradientBrush(
-                    Color.FromRgb(0, 103, 192),
-                    Color.FromRgb(37, 99, 235),
-                    90
-                ),
-                Margin = new Thickness(0, 0, 14, 0)
+                Location = new Point(0, 4),
+                Size = new Size(44, 44),
+                BackColor = Color.Transparent
             };
-            var logoCanvas = new Canvas { Width = 26, Height = 26, HorizontalAlignment = WpfHAlign.Center, VerticalAlignment = WpfVAlign.Center };
-            var printerBody = new System.Windows.Shapes.Rectangle
+            logoBox.Paint += (s, e) =>
             {
-                Width = 22,
-                Height = 12,
-                RadiusX = 2,
-                RadiusY = 2,
-                Fill = Brushes.White,
-                Margin = new Thickness(2, 8, 0, 0)
+                e.Graphics.SmoothingMode = SmoothingMode.AntiAlias;
+                var rect = new Rectangle(0, 0, 43, 43);
+                using var path = FluentTheme.CreateRoundedPath(rect, 10);
+                using var brush = new LinearGradientBrush(rect, Color.FromArgb(0, 103, 192), Color.FromArgb(37, 99, 235), 90);
+                e.Graphics.FillPath(brush, path);
+
+                // Simple White Printer Glyph
+                using var whiteBrush = new SolidBrush(Color.White);
+                using var whitePen = new Pen(Color.White, 2f);
+                e.Graphics.FillRectangle(whiteBrush, 11, 20, 22, 13);
+                e.Graphics.DrawRectangle(whitePen, 15, 11, 14, 8);
+                using var blueBrush = new SolidBrush(Color.FromArgb(0, 103, 192));
+                e.Graphics.FillRectangle(blueBrush, 14, 27, 16, 2);
             };
-            var paperTop = new System.Windows.Shapes.Rectangle
-            {
-                Width = 14,
-                Height = 6,
-                RadiusX = 1,
-                RadiusY = 1,
-                Fill = new SolidColorBrush(Color.FromArgb(200, 255, 255, 255)),
-                Margin = new Thickness(6, 2, 0, 0)
-            };
-            var paperSlot = new System.Windows.Shapes.Rectangle
-            {
-                Width = 10,
-                Height = 2,
-                Fill = new SolidColorBrush(Color.FromRgb(0, 103, 192)),
-                Margin = new Thickness(8, 14, 0, 0)
-            };
-            logoCanvas.Children.Add(paperTop);
-            logoCanvas.Children.Add(printerBody);
-            logoCanvas.Children.Add(paperSlot);
-            logoBorder.Child = logoCanvas;
-            Grid.SetColumn(logoBorder, 0);
-            headerGrid.Children.Add(logoBorder);
+            headerPanel.Controls.Add(logoBox);
 
             // Title & Subtitle
-            var titlePanel = new StackPanel { VerticalAlignment = WpfVAlign.Center };
-            var txtTitle = new TextBlock
+            var lblTitle = new Label
             {
                 Text = "XeroxGo Agent",
-                FontSize = 18,
-                FontWeight = FontWeights.SemiBold,
-                Foreground = new SolidColorBrush(Color.FromRgb(15, 23, 42))
+                Font = FluentTheme.Font(14f, FontStyle.Bold),
+                ForeColor = FluentTheme.TextPrimary,
+                Location = new Point(54, 4),
+                AutoSize = true
             };
-            var txtSubtitle = new TextBlock
+            var lblSubtitle = new Label
             {
                 Text = "High-reliability counter printer daemon for Windows",
-                FontSize = 12,
-                Foreground = new SolidColorBrush(Color.FromRgb(100, 116, 139)),
-                Margin = new Thickness(0, 2, 0, 0)
+                Font = FluentTheme.Font(8.5f),
+                ForeColor = FluentTheme.TextSecondary,
+                Location = new Point(55, 28),
+                AutoSize = true
             };
-            titlePanel.Children.Add(txtTitle);
-            titlePanel.Children.Add(txtSubtitle);
-            Grid.SetColumn(titlePanel, 1);
-            headerGrid.Children.Add(titlePanel);
+            headerPanel.Controls.Add(lblTitle);
+            headerPanel.Controls.Add(lblSubtitle);
 
-            // Status Badge
-            _statusBadge = new Border
+            // Status Badge (Top Right)
+            _statusBadge = new FluentStatusBadge
             {
-                CornerRadius = new CornerRadius(14),
-                Padding = new Thickness(12, 6, 12, 6),
-                VerticalAlignment = WpfVAlign.Center
+                Location = new Point(contentWidth - 145, 12),
+                Size = new Size(145, 28)
             };
-            var badgePanel = new StackPanel { Orientation = Orientation.Horizontal };
-            _statusDot = new Ellipse { Width = 8, Height = 8, VerticalAlignment = WpfVAlign.Center, Margin = new Thickness(0, 0, 8, 0) };
-            _statusText = new TextBlock { FontSize = 12, FontWeight = FontWeights.SemiBold, VerticalAlignment = WpfVAlign.Center };
-            badgePanel.Children.Add(_statusDot);
-            badgePanel.Children.Add(_statusText);
-            _statusBadge.Child = badgePanel;
-            UpdateStatusPill(currentStatus, statusState);
-            Grid.SetColumn(_statusBadge, 2);
-            headerGrid.Children.Add(_statusBadge);
+            _statusBadge.SetStatus(currentStatus, statusState);
+            headerPanel.Controls.Add(_statusBadge);
 
-            Grid.SetRow(headerGrid, 0);
-            rootGrid.Children.Add(headerGrid);
+            Controls.Add(headerPanel);
+            currentY += 62;
 
             // ==========================================
-            // Row 1: Scrollable Card Surfaces
+            // 2. Card 1: Cloud Backend
             // ==========================================
-            var scrollViewer = new ScrollViewer
+            var cardCloud = new FluentCard
             {
-                VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
-                HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled,
-                Padding = new Thickness(28, 0, 28, 12)
+                Location = new Point(marginX, currentY),
+                Size = new Size(contentWidth, 150),
+                CornerRadius = 8
             };
 
-            var cardsPanel = new StackPanel();
-
-            // Card 1: Cloud Backend
-            cardsPanel.Children.Add(CreateCloudBackendCard());
-
-            // Card 2: Physical Hardware & Slot
-            cardsPanel.Children.Add(CreateHardwareCard());
-
-            // Card 3: Automation & Dispatch
-            cardsPanel.Children.Add(CreateAutomationCard());
-
-            scrollViewer.Content = cardsPanel;
-            Grid.SetRow(scrollViewer, 1);
-            rootGrid.Children.Add(scrollViewer);
-
-            // ==========================================
-            // Row 2: Bottom Action Bar
-            // ==========================================
-            var footerBorder = new Border
+            var lblCloudHeader = new Label
             {
-                BorderBrush = new SolidColorBrush(Color.FromRgb(226, 232, 240)),
-                BorderThickness = new Thickness(0, 1, 0, 0),
-                Background = Brushes.White,
-                Padding = new Thickness(28, 14, 28, 18)
+                Text = "Cloud Backend",
+                Font = FluentTheme.Font(10.5f, FontStyle.Bold),
+                ForeColor = FluentTheme.TextPrimary,
+                Location = new Point(14, 12),
+                AutoSize = true
             };
-            var footerGrid = new Grid();
-            footerGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-            footerGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-            footerGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+            cardCloud.Controls.Add(lblCloudHeader);
 
-            // Logs Button
-            var btnLogs = CreateSecondaryButton("📄  View Activity Logs");
-            btnLogs.Click += (s, e) =>
+            var lblApiUrl = new Label
             {
-                string path = Logger.GetLogFilePath();
-                if (File.Exists(path))
-                {
-                    Process.Start(new ProcessStartInfo { FileName = path, UseShellExecute = true });
-                }
-                else
-                {
-                    MessageBox.Show("No log file found yet.", "XeroxGo Logs", MessageBoxButton.OK, MessageBoxImage.Information);
-                }
+                Text = "API Base URL:",
+                ForeColor = FluentTheme.TextSecondary,
+                Location = new Point(14, 40),
+                AutoSize = true
             };
-            Grid.SetColumn(btnLogs, 0);
-            footerGrid.Children.Add(btnLogs);
+            cardCloud.Controls.Add(lblApiUrl);
 
-            // Actions (Cancel + Save)
-            var actionButtons = new StackPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = WpfHAlign.Right };
-
-            var btnCancel = CreateSecondaryButton("Cancel");
-            btnCancel.Width = 90;
-            btnCancel.Margin = new Thickness(0, 0, 12, 0);
-            btnCancel.Click += (s, e) => Close();
-            actionButtons.Children.Add(btnCancel);
-
-            var btnSave = new Button
-            {
-                Content = "Save & Connect",
-                Width = 140,
-                Height = 36,
-                Background = new SolidColorBrush(Color.FromRgb(0, 103, 192)),
-                Foreground = Brushes.White,
-                FontWeight = FontWeights.SemiBold,
-                FontSize = 13,
-                Cursor = Cursors.Hand
-            };
-            btnSave.Template = CreateRoundedButtonTemplate(
-                new CornerRadius(6),
-                new SolidColorBrush(Color.FromRgb(0, 103, 192)),
-                new SolidColorBrush(Color.FromRgb(24, 119, 211)),
-                new SolidColorBrush(Color.FromRgb(0, 90, 168)),
-                Brushes.White
-            );
-            btnSave.Click += OnSaveClicked;
-            actionButtons.Children.Add(btnSave);
-
-            Grid.SetColumn(actionButtons, 2);
-            footerGrid.Children.Add(actionButtons);
-
-            footerBorder.Child = footerGrid;
-            Grid.SetRow(footerBorder, 2);
-            rootGrid.Children.Add(footerBorder);
-        }
-
-        #region Card Builders
-        private Border CreateCloudBackendCard()
-        {
-            var card = CreateBaseCard();
-            var content = new StackPanel();
-
-            content.Children.Add(CreateCardHeader("☁️  Cloud Backend Connection", "Configure pairing with your XeroxGo cloud server."));
-
-            // 1. API URL
-            content.Children.Add(CreateFieldLabel("Server API Endpoint"));
-            var urlBorder = CreateInputContainer();
             _txtApiUrl = new TextBox
             {
-                BorderThickness = new Thickness(0),
-                Background = Brushes.Transparent,
-                FontSize = 13,
-                Foreground = new SolidColorBrush(Color.FromRgb(15, 23, 42)),
-                VerticalAlignment = WpfVAlign.Center
+                Location = new Point(16, 58),
+                Size = new Size(contentWidth - 32, 26),
+                Font = FluentTheme.Font(9.5f)
             };
-            urlBorder.Child = _txtApiUrl;
-            content.Children.Add(urlBorder);
+            cardCloud.Controls.Add(_txtApiUrl);
 
-            // 2. API Key
-            content.Children.Add(CreateFieldLabel("Shop Agent Security Key (Bearer Token)"));
-            var keyBorder = CreateInputContainer();
-            var keyGrid = new Grid();
-            keyGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-            keyGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-
-            _txtApiKey = new PasswordBox
+            var lblApiKey = new Label
             {
-                BorderThickness = new Thickness(0),
-                Background = Brushes.Transparent,
-                FontSize = 13,
-                Foreground = new SolidColorBrush(Color.FromRgb(15, 23, 42)),
-                VerticalAlignment = WpfVAlign.Center
+                Text = "Agent API Key / Secret:",
+                ForeColor = FluentTheme.TextSecondary,
+                Location = new Point(14, 90),
+                AutoSize = true
             };
-            Grid.SetColumn(_txtApiKey, 0);
-            keyGrid.Children.Add(_txtApiKey);
+            cardCloud.Controls.Add(lblApiKey);
 
-            _txtApiKeyRevealed = new TextBox
+            _txtApiKey = new TextBox
             {
-                BorderThickness = new Thickness(0),
-                Background = Brushes.Transparent,
-                FontSize = 13,
-                Foreground = new SolidColorBrush(Color.FromRgb(15, 23, 42)),
-                VerticalAlignment = WpfVAlign.Center,
-                Visibility = Visibility.Collapsed
+                Location = new Point(16, 108),
+                Size = new Size(contentWidth - 110, 26),
+                Font = FluentTheme.Font(9.5f),
+                UseSystemPasswordChar = true
             };
-            Grid.SetColumn(_txtApiKeyRevealed, 0);
-            keyGrid.Children.Add(_txtApiKeyRevealed);
+            cardCloud.Controls.Add(_txtApiKey);
 
-            _btnToggleKeyVisibility = new Button
+            _btnToggleKey = new Button
             {
-                Content = "👁",
-                Background = Brushes.Transparent,
-                BorderThickness = new Thickness(0),
-                FontSize = 14,
+                Text = "Show",
+                Location = new Point(contentWidth - 86, 107),
+                Size = new Size(70, 28),
+                FlatStyle = FlatStyle.Flat,
                 Cursor = Cursors.Hand,
-                Padding = new Thickness(6, 0, 4, 0),
-                Foreground = new SolidColorBrush(Color.FromRgb(100, 116, 139))
+                Font = FluentTheme.Font(8.5f),
+                BackColor = Color.FromArgb(241, 245, 249),
+                ForeColor = FluentTheme.TextPrimary
             };
-            _btnToggleKeyVisibility.Click += (s, e) =>
+            _btnToggleKey.FlatAppearance.BorderColor = FluentTheme.CardBorder;
+            _btnToggleKey.Click += OnToggleKeyVisibility;
+            cardCloud.Controls.Add(_btnToggleKey);
+
+            Controls.Add(cardCloud);
+            currentY += 162;
+
+            // ==========================================
+            // 3. Card 2: Hardware & Routing
+            // ==========================================
+            var cardHardware = new FluentCard
             {
-                _isKeyRevealed = !_isKeyRevealed;
-                if (_isKeyRevealed)
-                {
-                    _txtApiKeyRevealed.Text = _txtApiKey.Password;
-                    _txtApiKey.Visibility = Visibility.Collapsed;
-                    _txtApiKeyRevealed.Visibility = Visibility.Visible;
-                }
-                else
-                {
-                    _txtApiKey.Password = _txtApiKeyRevealed.Text;
-                    _txtApiKeyRevealed.Visibility = Visibility.Collapsed;
-                    _txtApiKey.Visibility = Visibility.Visible;
-                }
+                Location = new Point(marginX, currentY),
+                Size = new Size(contentWidth, 150),
+                CornerRadius = 8
             };
-            Grid.SetColumn(_btnToggleKeyVisibility, 1);
-            keyGrid.Children.Add(_btnToggleKeyVisibility);
 
-            keyBorder.Child = keyGrid;
-            content.Children.Add(keyBorder);
+            var lblHwHeader = new Label
+            {
+                Text = "Hardware & Routing",
+                Font = FluentTheme.Font(10.5f, FontStyle.Bold),
+                ForeColor = FluentTheme.TextPrimary,
+                Location = new Point(14, 12),
+                AutoSize = true
+            };
+            cardHardware.Controls.Add(lblHwHeader);
 
-            card.Child = content;
-            return card;
-        }
+            var lblSlot = new Label
+            {
+                Text = "Logical Printer Slot (Cloud Station):",
+                ForeColor = FluentTheme.TextSecondary,
+                Location = new Point(14, 40),
+                AutoSize = true
+            };
+            cardHardware.Controls.Add(lblSlot);
 
-        private Border CreateHardwareCard()
-        {
-            var card = CreateBaseCard();
-            var content = new StackPanel();
-
-            content.Children.Add(CreateCardHeader("🖨️  Physical Hardware & Counter Mapping", "Map this computer to a dashboard slot and Windows printer driver."));
-
-            // Logical Slot
-            content.Children.Add(CreateFieldLabel("Logical Slot in XeroxGo Dashboard"));
             _cmbLogicalSlot = new ComboBox
             {
-                FontSize = 13,
-                Height = 38,
-                Margin = new Thickness(0, 0, 0, 14),
-                IsEditable = true
+                Location = new Point(16, 58),
+                Size = new Size(contentWidth - 32, 26),
+                DropDownStyle = ComboBoxStyle.DropDown,
+                Font = FluentTheme.Font(9.5f)
             };
-            _cmbLogicalSlot.Items.Add("Printer 1");
-            _cmbLogicalSlot.Items.Add("Printer 2");
-            _cmbLogicalSlot.Items.Add("Printer 3");
-            _cmbLogicalSlot.Items.Add("Printer 4");
-            _cmbLogicalSlot.Items.Add("Main B&W Counter");
-            _cmbLogicalSlot.Items.Add("Color Printer Counter");
-            content.Children.Add(_cmbLogicalSlot);
+            _cmbLogicalSlot.Items.AddRange(new object[] { "Primary", "Secondary", "Counter 1", "Counter 2", "Color Station", "BW Station" });
+            cardHardware.Controls.Add(_cmbLogicalSlot);
 
-            // Physical Windows Printer
-            content.Children.Add(CreateFieldLabel("Local Physical Windows Printer Driver"));
-            var printerGrid = new Grid { Margin = new Thickness(0, 0, 0, 14) };
-            printerGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-            printerGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+            var lblPhysical = new Label
+            {
+                Text = "Physical Windows Spooler Driver:",
+                ForeColor = FluentTheme.TextSecondary,
+                Location = new Point(14, 90),
+                AutoSize = true
+            };
+            cardHardware.Controls.Add(lblPhysical);
 
             _cmbPhysicalPrinters = new ComboBox
             {
-                FontSize = 13,
-                Height = 38,
-                Margin = new Thickness(0, 0, 10, 0)
+                Location = new Point(16, 108),
+                Size = new Size(contentWidth - 32, 26),
+                DropDownStyle = ComboBoxStyle.DropDownList,
+                Font = FluentTheme.Font(9.5f)
             };
-            Grid.SetColumn(_cmbPhysicalPrinters, 0);
-            printerGrid.Children.Add(_cmbPhysicalPrinters);
+            cardHardware.Controls.Add(_cmbPhysicalPrinters);
 
-            var btnRefresh = CreateSecondaryButton("🔄  Refresh");
-            btnRefresh.Height = 38;
-            btnRefresh.Click += (s, e) => PopulatePhysicalPrinters();
-            Grid.SetColumn(btnRefresh, 1);
-            printerGrid.Children.Add(btnRefresh);
+            Controls.Add(cardHardware);
+            currentY += 162;
 
-            content.Children.Add(printerGrid);
-
-            // Diagnostic Slip Button
-            var btnTest = CreateSecondaryButton("🖨️  Send Diagnostic Test Slip to Selected Printer");
-            btnTest.HorizontalAlignment = WpfHAlign.Left;
-            btnTest.Click += OnTestPrintClicked;
-            content.Children.Add(btnTest);
-
-            card.Child = content;
-            return card;
-        }
-
-        private Border CreateAutomationCard()
-        {
-            var card = CreateBaseCard();
-            var content = new StackPanel();
-
-            content.Children.Add(CreateCardHeader("⚡  Automation & Dispatch", "Configure job polling cadence and system startup."));
-
-            // Polling Slider
-            var pollHeaderGrid = new Grid { Margin = new Thickness(0, 0, 0, 6) };
-            var lblPollTitle = new TextBlock
+            // ==========================================
+            // 4. Card 3: Operational Telemetry & System
+            // ==========================================
+            var cardSystem = new FluentCard
             {
-                Text = "Queue Polling Interval",
-                FontSize = 12,
-                FontWeight = FontWeights.Medium,
-                Foreground = new SolidColorBrush(Color.FromRgb(51, 65, 85))
+                Location = new Point(marginX, currentY),
+                Size = new Size(contentWidth, 140),
+                CornerRadius = 8
             };
-            _lblPollValue = new TextBlock
-            {
-                Text = "Every 3 seconds",
-                FontSize = 12,
-                FontWeight = FontWeights.SemiBold,
-                Foreground = new SolidColorBrush(Color.FromRgb(0, 103, 192)),
-                HorizontalAlignment = WpfHAlign.Right
-            };
-            pollHeaderGrid.Children.Add(lblPollTitle);
-            pollHeaderGrid.Children.Add(_lblPollValue);
-            content.Children.Add(pollHeaderGrid);
 
-            _sliderPoll = new Slider
+            var lblSysHeader = new Label
             {
+                Text = "Operational Telemetry & System",
+                Font = FluentTheme.Font(10.5f, FontStyle.Bold),
+                ForeColor = FluentTheme.TextPrimary,
+                Location = new Point(14, 12),
+                AutoSize = true
+            };
+            cardSystem.Controls.Add(lblSysHeader);
+
+            _lblPollValue = new Label
+            {
+                Text = "Queue Poll Interval: 3 seconds",
+                ForeColor = FluentTheme.TextSecondary,
+                Location = new Point(14, 38),
+                AutoSize = true
+            };
+            cardSystem.Controls.Add(_lblPollValue);
+
+            _trackPoll = new TrackBar
+            {
+                Location = new Point(12, 58),
+                Size = new Size(contentWidth - 24, 32),
                 Minimum = 1,
-                Maximum = 30,
+                Maximum = 15,
                 Value = 3,
                 TickFrequency = 1,
-                IsSnapToTickEnabled = true,
-                Margin = new Thickness(0, 0, 0, 18)
+                AutoSize = false
             };
-            _sliderPoll.ValueChanged += (s, e) =>
+            _trackPoll.ValueChanged += (s, e) =>
             {
-                int val = (int)e.NewValue;
-                _lblPollValue.Text = val == 1 ? "Every 1 second (Ultra-responsive)" : $"Every {val} seconds";
+                _lblPollValue.Text = $"Queue Poll Interval: {_trackPoll.Value} second{(_trackPoll.Value == 1 ? "" : "s")}";
             };
-            content.Children.Add(_sliderPoll);
+            cardSystem.Controls.Add(_trackPoll);
 
-            // Windows Startup Toggle Row
-            var startupBorder = new Border
+            _chkAutoStart = new CheckBox
             {
-                Background = new SolidColorBrush(Color.FromRgb(248, 250, 252)),
-                BorderBrush = new SolidColorBrush(Color.FromRgb(226, 232, 240)),
-                BorderThickness = new Thickness(1),
-                CornerRadius = new CornerRadius(6),
-                Padding = new Thickness(14, 12, 14, 12),
+                Text = "Launch XeroxGo Agent automatically on Windows startup",
+                Location = new Point(16, 98),
+                Size = new Size(contentWidth - 32, 24),
+                ForeColor = FluentTheme.TextPrimary,
                 Cursor = Cursors.Hand
             };
-            var startupGrid = new Grid();
-            startupGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-            startupGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+            cardSystem.Controls.Add(_chkAutoStart);
 
-            var startupTextPanel = new StackPanel();
-            var lblStartupTitle = new TextBlock
+            Controls.Add(cardSystem);
+            currentY += 152;
+
+            // ==========================================
+            // 5. Footer Buttons
+            // ==========================================
+            var footerPanel = new Panel
             {
-                Text = "Launch automatically on Windows startup",
-                FontSize = 13,
-                FontWeight = FontWeights.Medium,
-                Foreground = new SolidColorBrush(Color.FromRgb(15, 23, 42))
+                Location = new Point(marginX, currentY),
+                Size = new Size(contentWidth, 42),
+                BackColor = Color.Transparent
             };
-            var lblStartupSub = new TextBlock
+
+            _btnTestSlip = new FluentButton
             {
-                Text = "Runs silently in the system tray when PC boots up",
-                FontSize = 11.5,
-                Foreground = new SolidColorBrush(Color.FromRgb(100, 116, 139)),
-                Margin = new Thickness(0, 2, 0, 0)
+                Text = "🖨️  Print Test Slip",
+                Location = new Point(0, 4),
+                Size = new Size(140, 34),
+                IsPrimary = false
             };
-            startupTextPanel.Children.Add(lblStartupTitle);
-            startupTextPanel.Children.Add(lblStartupSub);
-            Grid.SetColumn(startupTextPanel, 0);
-            startupGrid.Children.Add(startupTextPanel);
+            _btnTestSlip.Click += OnPrintTestSlip;
+            footerPanel.Controls.Add(_btnTestSlip);
 
-            // Toggle Switch Visual
-            var toggleContainer = new StackPanel { Orientation = Orientation.Horizontal, VerticalAlignment = WpfVAlign.Center };
-            _lblToggleStatus = new TextBlock
+            _btnCancel = new FluentButton
             {
-                Text = "Off",
-                FontSize = 12,
-                FontWeight = FontWeights.Medium,
-                Foreground = new SolidColorBrush(Color.FromRgb(100, 116, 139)),
-                VerticalAlignment = WpfVAlign.Center,
-                Margin = new Thickness(0, 0, 8, 0)
+                Text = "Cancel",
+                Location = new Point(contentWidth - 240, 4),
+                Size = new Size(100, 34),
+                IsPrimary = false
             };
-            toggleContainer.Children.Add(_lblToggleStatus);
+            _btnCancel.Click += (s, e) => Close();
+            footerPanel.Controls.Add(_btnCancel);
 
-            _togglePill = new Border
+            _btnSave = new FluentButton
             {
-                Width = 44,
-                Height = 22,
-                CornerRadius = new CornerRadius(11),
-                Background = new SolidColorBrush(Color.FromRgb(226, 232, 240)),
-                BorderBrush = new SolidColorBrush(Color.FromRgb(203, 213, 225)),
-                BorderThickness = new Thickness(1),
-                Padding = new Thickness(2)
+                Text = "Save Changes",
+                Location = new Point(contentWidth - 130, 4),
+                Size = new Size(130, 34),
+                IsPrimary = true
             };
-            var toggleCanvas = new Canvas { Width = 38, Height = 16 };
-            _toggleThumb = new Ellipse
-            {
-                Width = 14,
-                Height = 14,
-                Fill = new SolidColorBrush(Color.FromRgb(100, 116, 139))
-            };
-            Canvas.SetLeft(_toggleThumb, 2);
-            Canvas.SetTop(_toggleThumb, 1);
-            toggleCanvas.Children.Add(_toggleThumb);
-            _togglePill.Child = toggleCanvas;
-            toggleContainer.Children.Add(_togglePill);
+            _btnSave.Click += OnSave;
+            footerPanel.Controls.Add(_btnSave);
 
-            startupBorder.MouseDown += (s, e) => ToggleAutoStart();
-            Grid.SetColumn(toggleContainer, 1);
-            startupGrid.Children.Add(toggleContainer);
+            Controls.Add(footerPanel);
 
-            startupBorder.Child = startupGrid;
-            content.Children.Add(startupBorder);
-
-            card.Child = content;
-            return card;
+            ResumeLayout(false);
         }
 
-        private void ToggleAutoStart()
-        {
-            _isAutoStartEnabled = !_isAutoStartEnabled;
-            UpdateToggleVisual();
-        }
-
-        private void UpdateToggleVisual()
-        {
-            if (_isAutoStartEnabled)
-            {
-                _togglePill.Background = new SolidColorBrush(Color.FromRgb(0, 103, 192));
-                _togglePill.BorderBrush = new SolidColorBrush(Color.FromRgb(0, 103, 192));
-                _toggleThumb.Fill = Brushes.White;
-                Canvas.SetLeft(_toggleThumb, 22);
-                _lblToggleStatus.Text = "Active";
-                _lblToggleStatus.Foreground = new SolidColorBrush(Color.FromRgb(0, 103, 192));
-            }
-            else
-            {
-                _togglePill.Background = new SolidColorBrush(Color.FromRgb(226, 232, 240));
-                _togglePill.BorderBrush = new SolidColorBrush(Color.FromRgb(203, 213, 225));
-                _toggleThumb.Fill = new SolidColorBrush(Color.FromRgb(100, 116, 139));
-                Canvas.SetLeft(_toggleThumb, 2);
-                _lblToggleStatus.Text = "Off";
-                _lblToggleStatus.Foreground = new SolidColorBrush(Color.FromRgb(100, 116, 139));
-            }
-        }
-        #endregion
-
-        #region Helpers & Theming
-        private static Border CreateBaseCard()
-        {
-            return new Border
-            {
-                Background = Brushes.White,
-                BorderBrush = new SolidColorBrush(Color.FromRgb(226, 232, 240)),
-                BorderThickness = new Thickness(1),
-                CornerRadius = new CornerRadius(8),
-                Padding = new Thickness(20),
-                Margin = new Thickness(0, 0, 0, 16),
-                Effect = new DropShadowEffect
-                {
-                    Color = Color.FromRgb(15, 23, 42),
-                    BlurRadius = 8,
-                    ShadowDepth = 1,
-                    Opacity = 0.04
-                }
-            };
-        }
-
-        private static StackPanel CreateCardHeader(string title, string subtitle)
-        {
-            var panel = new StackPanel { Margin = new Thickness(0, 0, 0, 14) };
-            panel.Children.Add(new TextBlock
-            {
-                Text = title,
-                FontSize = 14,
-                FontWeight = FontWeights.SemiBold,
-                Foreground = new SolidColorBrush(Color.FromRgb(15, 23, 42))
-            });
-            panel.Children.Add(new TextBlock
-            {
-                Text = subtitle,
-                FontSize = 11.5,
-                Foreground = new SolidColorBrush(Color.FromRgb(100, 116, 139)),
-                Margin = new Thickness(0, 2, 0, 0)
-            });
-            return panel;
-        }
-
-        private static TextBlock CreateFieldLabel(string label)
-        {
-            return new TextBlock
-            {
-                Text = label,
-                FontSize = 12,
-                FontWeight = FontWeights.Medium,
-                Foreground = new SolidColorBrush(Color.FromRgb(51, 65, 85)),
-                Margin = new Thickness(0, 0, 0, 6)
-            };
-        }
-
-        private static Border CreateInputContainer()
-        {
-            return new Border
-            {
-                Background = new SolidColorBrush(Color.FromRgb(248, 250, 252)),
-                BorderBrush = new SolidColorBrush(Color.FromRgb(203, 213, 225)),
-                BorderThickness = new Thickness(1),
-                CornerRadius = new CornerRadius(6),
-                Height = 38,
-                Padding = new Thickness(12, 6, 12, 6),
-                Margin = new Thickness(0, 0, 0, 14)
-            };
-        }
-
-        private static Button CreateSecondaryButton(string text)
-        {
-            var btn = new Button
-            {
-                Content = text,
-                Height = 36,
-                Padding = new Thickness(14, 0, 14, 0),
-                FontSize = 12.5,
-                FontWeight = FontWeights.Medium,
-                Foreground = new SolidColorBrush(Color.FromRgb(30, 41, 59)),
-                Cursor = Cursors.Hand
-            };
-            btn.Template = CreateRoundedButtonTemplate(
-                new CornerRadius(6),
-                Brushes.White,
-                new SolidColorBrush(Color.FromRgb(241, 245, 249)),
-                new SolidColorBrush(Color.FromRgb(226, 232, 240)),
-                new SolidColorBrush(Color.FromRgb(30, 41, 59)),
-                new SolidColorBrush(Color.FromRgb(226, 232, 240))
-            );
-            return btn;
-        }
-
-        private static ControlTemplate CreateRoundedButtonTemplate(
-            CornerRadius cornerRadius,
-            Brush normalBg,
-            Brush hoverBg,
-            Brush pressedBg,
-            Brush textBrush,
-            Brush? borderBrush = null)
-        {
-            var template = new ControlTemplate(typeof(Button));
-            var borderFactory = new FrameworkElementFactory(typeof(Border));
-            borderFactory.Name = "border";
-            borderFactory.SetValue(Border.CornerRadiusProperty, cornerRadius);
-            borderFactory.SetValue(Border.BackgroundProperty, normalBg);
-            borderFactory.SetValue(Border.BorderThicknessProperty, borderBrush != null ? new Thickness(1) : new Thickness(0));
-            if (borderBrush != null)
-            {
-                borderFactory.SetValue(Border.BorderBrushProperty, borderBrush);
-            }
-
-            var presenterFactory = new FrameworkElementFactory(typeof(ContentPresenter));
-            presenterFactory.SetValue(ContentPresenter.HorizontalAlignmentProperty, WpfHAlign.Center);
-            presenterFactory.SetValue(ContentPresenter.VerticalAlignmentProperty, WpfVAlign.Center);
-            presenterFactory.SetValue(TextBlock.ForegroundProperty, textBrush);
-            borderFactory.AppendChild(presenterFactory);
-
-            template.VisualTree = borderFactory;
-
-            // Hover Trigger
-            var hoverTrigger = new Trigger { Property = Button.IsMouseOverProperty, Value = true };
-            hoverTrigger.Setters.Add(new Setter(Border.BackgroundProperty, hoverBg, "border"));
-            template.Triggers.Add(hoverTrigger);
-
-            // Pressed Trigger
-            var pressTrigger = new Trigger { Property = Button.IsPressedProperty, Value = true };
-            pressTrigger.Setters.Add(new Setter(Border.BackgroundProperty, pressedBg, "border"));
-            template.Triggers.Add(pressTrigger);
-
-            return template;
-        }
-
-        public void UpdateStatusPill(string text, string state)
-        {
-            _statusText.Text = text;
-            switch (state.ToLowerInvariant())
-            {
-                case "printing":
-                    _statusBadge.Background = new SolidColorBrush(Color.FromRgb(224, 242, 254)); // Sky-100
-                    _statusText.Foreground = new SolidColorBrush(Color.FromRgb(3, 105, 161));   // Sky-700
-                    _statusDot.Fill = new SolidColorBrush(Color.FromRgb(14, 165, 233));         // Sky-500
-                    break;
-                case "paused":
-                    _statusBadge.Background = new SolidColorBrush(Color.FromRgb(254, 243, 199)); // Amber-100
-                    _statusText.Foreground = new SolidColorBrush(Color.FromRgb(180, 83, 9));     // Amber-700
-                    _statusDot.Fill = new SolidColorBrush(Color.FromRgb(245, 158, 11));          // Amber-500
-                    break;
-                case "error":
-                case "offline":
-                    _statusBadge.Background = new SolidColorBrush(Color.FromRgb(254, 226, 226)); // Red-100
-                    _statusText.Foreground = new SolidColorBrush(Color.FromRgb(185, 28, 28));    // Red-700
-                    _statusDot.Fill = new SolidColorBrush(Color.FromRgb(239, 68, 68));           // Red-500
-                    break;
-                default:
-                    _statusBadge.Background = new SolidColorBrush(Color.FromRgb(220, 252, 231)); // Emerald-100
-                    _statusText.Foreground = new SolidColorBrush(Color.FromRgb(21, 128, 61));    // Emerald-700
-                    _statusDot.Fill = new SolidColorBrush(Color.FromRgb(34, 197, 94));           // Emerald-500
-                    break;
-            }
-        }
-        #endregion
-
-        #region Logic & Event Handlers
         private void LoadConfiguration()
         {
             _txtApiUrl.Text = _config.ApiUrl;
-            _txtApiKey.Password = _config.AgentApiKey;
+            _txtApiKey.Text = _config.AgentApiKey;
             _cmbLogicalSlot.Text = _config.LogicalPrinterName;
-            _sliderPoll.Value = Math.Max(1, Math.Min(30, _config.PollIntervalSeconds));
-            _isAutoStartEnabled = _config.AutoStartWithWindows;
-            UpdateToggleVisual();
 
-            PopulatePhysicalPrinters();
-        }
-
-        private void PopulatePhysicalPrinters()
-        {
+            // Populate installed printers
             _cmbPhysicalPrinters.Items.Clear();
-            _cmbPhysicalPrinters.Items.Add("Auto (Auto-Detect Physical Windows Printer)");
+            _cmbPhysicalPrinters.Items.Add("Auto (Detect Default)");
 
             var installed = HardwareMonitor.GetInstalledPrinters();
             foreach (var p in installed)
             {
-                string label = HardwareMonitor.IsVirtualPrinter(p) ? $"{p} [Virtual]" : p;
-                _cmbPhysicalPrinters.Items.Add(label);
+                _cmbPhysicalPrinters.Items.Add(p);
             }
 
             if (string.IsNullOrWhiteSpace(_config.PhysicalPrinterName) || _config.PhysicalPrinterName.Equals("Auto", StringComparison.OrdinalIgnoreCase))
@@ -775,90 +393,79 @@ namespace XeroxGo.PrinterAgent.UI
             }
             else
             {
-                int matchIndex = -1;
-                for (int i = 0; i < _cmbPhysicalPrinters.Items.Count; i++)
-                {
-                    string item = _cmbPhysicalPrinters.Items[i]?.ToString() ?? "";
-                    if (item.StartsWith(_config.PhysicalPrinterName, StringComparison.OrdinalIgnoreCase))
-                    {
-                        matchIndex = i;
-                        break;
-                    }
-                }
-                _cmbPhysicalPrinters.SelectedIndex = matchIndex >= 0 ? matchIndex : 0;
+                int idx = _cmbPhysicalPrinters.Items.IndexOf(_config.PhysicalPrinterName);
+                _cmbPhysicalPrinters.SelectedIndex = idx >= 0 ? idx : 0;
             }
+
+            int pollVal = Math.Clamp(_config.PollIntervalSeconds, 1, 15);
+            _trackPoll.Value = pollVal;
+            _lblPollValue.Text = $"Queue Poll Interval: {pollVal} second{(pollVal == 1 ? "" : "s")}";
+
+            _chkAutoStart.Checked = StartupManager.IsAutoStartEnabled();
         }
 
-        private void OnTestPrintClicked(object sender, RoutedEventArgs e)
+        private void OnToggleKeyVisibility(object? sender, EventArgs e)
         {
+            _isKeyRevealed = !_isKeyRevealed;
+            _txtApiKey.UseSystemPasswordChar = !_isKeyRevealed;
+            _btnToggleKey.Text = _isKeyRevealed ? "Hide" : "Show";
+        }
+
+        private void OnPrintTestSlip(object? sender, EventArgs e)
+        {
+            string selected = _cmbPhysicalPrinters.SelectedItem?.ToString() ?? "Auto";
+            string resolved = HardwareMonitor.ResolveActivePrinter(selected);
+
             try
             {
-                string selected = GetSelectedPhysicalPrinterName();
-                string resolved = HardwareMonitor.ResolveActivePrinter(selected);
-
                 PrintEngine.PrintDiagnosticSlip(resolved);
                 MessageBox.Show(
-                    $"Diagnostic test slip sent to printer:\n\"{resolved}\"\n\nPlease inspect the printer output tray.",
-                    "Test Print Successful",
-                    MessageBoxButton.OK,
-                    MessageBoxImage.Information
+                    $"Hardware diagnostic ticket sent to spooler:\n'{resolved}'",
+                    "Diagnostic Print Sent",
+                    MessageBoxButtons.OK,
+                    MessageBoxIcon.Information
                 );
             }
             catch (Exception ex)
             {
                 MessageBox.Show(
-                    $"Failed to send test print: {ex.Message}",
-                    "Test Print Error",
-                    MessageBoxButton.OK,
-                    MessageBoxImage.Error
+                    $"Diagnostic print failed:\n{ex.Message}",
+                    "Spooler Error",
+                    MessageBoxButtons.OK,
+                    MessageBoxIcon.Error
                 );
             }
         }
 
-        private void OnSaveClicked(object sender, RoutedEventArgs e)
+        private void OnSave(object? sender, EventArgs e)
         {
-            string apiUrl = _txtApiUrl.Text.Trim();
-            if (string.IsNullOrWhiteSpace(apiUrl))
+            string url = _txtApiUrl.Text.Trim();
+            if (string.IsNullOrWhiteSpace(url) || !Uri.TryCreate(url, UriKind.Absolute, out _))
             {
-                MessageBox.Show("Please specify a valid backend API URL.", "Validation Error", MessageBoxButton.OK, MessageBoxImage.Warning);
+                MessageBox.Show("Please enter a valid absolute HTTP/HTTPS API URL.", "Validation Error", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                _txtApiUrl.Focus();
                 return;
             }
 
-            string logicalSlot = _cmbLogicalSlot.Text.Trim();
-            if (string.IsNullOrWhiteSpace(logicalSlot))
-            {
-                logicalSlot = "Printer 1";
-            }
+            _config.ApiUrl = url;
+            _config.AgentApiKey = _txtApiKey.Text.Trim();
+            _config.LogicalPrinterName = string.IsNullOrWhiteSpace(_cmbLogicalSlot.Text) ? "Primary" : _cmbLogicalSlot.Text.Trim();
 
-            string apiKey = _isKeyRevealed ? _txtApiKeyRevealed.Text.Trim() : _txtApiKey.Password.Trim();
+            string physicalSelection = _cmbPhysicalPrinters.SelectedItem?.ToString() ?? "Auto";
+            _config.PhysicalPrinterName = physicalSelection.StartsWith("Auto", StringComparison.OrdinalIgnoreCase) ? "Auto" : physicalSelection;
 
-            _config.ApiUrl = apiUrl;
-            _config.AgentApiKey = apiKey;
-            _config.LogicalPrinterName = logicalSlot;
-            _config.PhysicalPrinterName = GetSelectedPhysicalPrinterName();
-            _config.PollIntervalSeconds = (int)_sliderPoll.Value;
-            _config.AutoStartWithWindows = _isAutoStartEnabled;
+            _config.PollIntervalSeconds = _trackPoll.Value;
+            _config.AutoStartWithWindows = _chkAutoStart.Checked;
 
-            _config.Save();
+            // Apply autostart registry state
             StartupManager.SetAutoStart(_config.AutoStartWithWindows);
+
+            // Save to disk and invoke runtime callback
+            _config.Save();
             _onSaveCallback?.Invoke(_config);
 
-            MessageBox.Show(
-                $"Configuration saved successfully!\nSlot: {logicalSlot}\nDriver: {_config.PhysicalPrinterName}\nAPI: {apiUrl}",
-                "Settings Saved",
-                MessageBoxButton.OK,
-                MessageBoxImage.Information
-            );
-
+            DialogResult = DialogResult.OK;
             Close();
         }
-
-        private string GetSelectedPhysicalPrinterName()
-        {
-            if (_cmbPhysicalPrinters.SelectedIndex <= 0) return "Auto";
-            string raw = _cmbPhysicalPrinters.SelectedItem?.ToString() ?? "Auto";
-            return raw.Replace(" [Virtual]", "").Trim();
-        }
-        #endregion
     }
 }
