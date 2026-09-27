@@ -12,11 +12,8 @@
 ==============================================================================
 #>
 
-[CmdletBinding()]
 param(
-    [Parameter(Position=0)]
-    [ValidateSet('install', 'uninstall', 'status')]
-    [string]$Action,
+    [string]$Action = "",
     [switch]$Uninstall,
     [switch]$Install,
     [switch]$Silent
