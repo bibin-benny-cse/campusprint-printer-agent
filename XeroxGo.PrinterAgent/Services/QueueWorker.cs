@@ -1,0 +1,283 @@
+using System;
+using System.IO;
+using System.Net.Http;
+using System.Threading;
+using System.Threading.Tasks;
+using XeroxGo.PrinterAgent.Models;
+
+namespace XeroxGo.PrinterAgent.Services
+{
+    public class QueueWorker : IDisposable
+    {
+        private readonly AppConfig _config;
+        private ApiClient _api;
+        private string _logicalPrinter;
+        private string _physicalPrinter;
+        private CancellationTokenSource _cts = new();
+        private bool _isPaused = false;
+        private bool _isProcessing = false;
+        private int _consecutiveFailures = 0;
+
+        public event Action<string, string>? StatusChanged; // (Status, LogicalPrinterName)
+
+        public bool IsPaused
+        {
+            get => _isPaused;
+            set
+            {
+                _isPaused = value;
+                StatusChanged?.Invoke(_isPaused ? "Paused" : "Idle", _logicalPrinter);
+            }
+        }
+
+        public string LogicalPrinter => _logicalPrinter;
+        public string PhysicalPrinter => _physicalPrinter;
+        public string ActivePrinter => _logicalPrinter;
+
+        public QueueWorker(AppConfig config)
+        {
+            _config = config;
+            _api = new ApiClient(_config.ApiUrl, _config.AgentApiKey);
+            _logicalPrinter = _config.LogicalPrinterName;
+            _physicalPrinter = HardwareMonitor.ResolveActivePrinter(_config.PhysicalPrinterName);
+        }
+
+        public void ReloadConfiguration(AppConfig newConfig)
+        {
+            _config.ApiUrl = newConfig.ApiUrl;
+            _config.LogicalPrinterName = newConfig.LogicalPrinterName;
+            _config.PhysicalPrinterName = newConfig.PhysicalPrinterName;
+            _config.PollIntervalSeconds = newConfig.PollIntervalSeconds;
+            _config.AgentApiKey = newConfig.AgentApiKey;
+
+            _api = new ApiClient(_config.ApiUrl, _config.AgentApiKey);
+            _logicalPrinter = _config.LogicalPrinterName;
+            _physicalPrinter = HardwareMonitor.ResolveActivePrinter(_config.PhysicalPrinterName);
+            Logger.Info($"[CONFIG RELOADED] Logical: '{_logicalPrinter}', Physical Driver: '{_physicalPrinter}', API: {_config.ApiUrl}");
+        }
+
+        public void Start()
+        {
+            _cts = new CancellationTokenSource();
+            Task.Run(() => HeartbeatLoopAsync(_cts.Token));
+            Task.Run(() => QueuePollLoopAsync(_cts.Token));
+            Task.Run(() => ListenToSseStreamAsync(_cts.Token));
+            Logger.Info($"[WORKER STARTED] Monitoring queue for printer '{_activePrinter}'");
+        }
+
+        public void Stop()
+        {
+            _cts.Cancel();
+            Logger.Info("[WORKER STOPPED]");
+        }
+
+        private async Task HeartbeatLoopAsync(CancellationToken ct)
+        {
+            while (!ct.IsCancellationRequested)
+            {
+                try
+                {
+                    var health = HardwareMonitor.CheckPrinterHealth(_physicalPrinter);
+
+                    string status = _isPaused ? "Paused" : (_isProcessing ? "Printing" : health.StatusSummary);
+
+                    bool ok = await _api.SendHeartbeatAsync(
+                        _logicalPrinter,
+                        status,
+                        null,
+                        health.IsOnline,
+                        _physicalPrinter
+                    );
+
+                    if (ok)
+                    {
+                        if (_consecutiveFailures > 0)
+                        {
+                            Logger.Info("[BACKEND RECONNECTED] Backend connection restored.");
+                            _consecutiveFailures = 0;
+                        }
+                    }
+                    else
+                    {
+                        _consecutiveFailures++;
+                        if (_consecutiveFailures == 10) // ~50s of persistent offline
+                        {
+                            NotificationService.ShowCritical(
+                                "Backend Disconnected",
+                                "Cannot connect to XeroxGo cloud server. Please check your internet connection."
+                            );
+                        }
+                    }
+                }
+                catch (Exception ex)
+                {
+                    Logger.Warn($"Heartbeat loop exception: {ex.Message}");
+                }
+
+                await Task.Delay(_config.HeartbeatIntervalSeconds * 1000, ct).ConfigureAwait(false);
+            }
+        }
+
+        private bool _isSseConnected = false;
+
+        private async Task QueuePollLoopAsync(CancellationToken ct)
+        {
+            while (!ct.IsCancellationRequested)
+            {
+                if (!_isPaused && !_isProcessing)
+                {
+                    await CheckAndProcessQueueAsync().ConfigureAwait(false);
+                }
+
+                // Event-Driven Efficiency: When SSE is active, relax poll timer to 25s safety net.
+                // If SSE drops, tighten fallback polling back to configured interval (e.g. 3s).
+                int delaySeconds = _isSseConnected ? 25 : _config.PollIntervalSeconds;
+                await Task.Delay(delaySeconds * 1000, ct).ConfigureAwait(false);
+            }
+        }
+
+        private async Task CheckAndProcessQueueAsync()
+        {
+            if (_isProcessing || _isPaused) return;
+
+            try
+            {
+                var queue = await _api.GetPrintQueueAsync(_logicalPrinter);
+                if (queue.Count == 0)
+                {
+                    StatusChanged?.Invoke("Idle", _logicalPrinter);
+                    return;
+                }
+
+                // Process one job at a time to prevent queue collision
+                var job = queue[0];
+                await ExecuteJobAsync(job).ConfigureAwait(false);
+            }
+            catch (Exception ex)
+            {
+                Logger.Warn($"Queue poll check failed: {ex.Message}");
+            }
+        }
+
+        private async Task ExecuteJobAsync(PrintJob job)
+        {
+            // 1. Atomically claim/lease the job to prevent multi-agent race conditions
+            bool claimed = await _api.ClaimJobAsync(job.Id, _logicalPrinter, _physicalPrinter);
+            if (!claimed)
+            {
+                Logger.Info($"[JOB SKIPPED] Job ID={job.Id} was already claimed by another printer or cancelled.");
+                return;
+            }
+
+            _isProcessing = true;
+            StatusChanged?.Invoke("Printing", _logicalPrinter);
+            Logger.Info($"[JOB CLAIMED] Processing Job ID={job.Id} (Token: {job.Token}, File: {job.Filename}, Copies: {job.Copies})");
+
+            await _api.SendHeartbeatAsync(_logicalPrinter, "Printing", job.Id, true, _physicalPrinter);
+
+            string? downloadedPath = null;
+            ProcessedPdfResult? processedResult = null;
+
+            try
+            {
+                // 2. Download file
+                downloadedPath = await _api.DownloadFileAsync(job, _config.TempDirectory);
+                Logger.Info($"[DOWNLOAD DONE] Cached at: {downloadedPath}");
+
+                // 3. Pre-process PDF (2-Up, rotations, exclusions, ordering)
+                processedResult = PdfProcessor.ProcessPdfForPrinting(downloadedPath, job, _config.TempDirectory);
+
+                // 4. Send to physical spooler
+                await PrintEngine.PrintDocumentAsync(processedResult.FilePath, job, _physicalPrinter);
+                Logger.Info($"[PRINT COMPLETE] Job {job.Id} successfully spooled to {_physicalPrinter}");
+
+                // 5. Mark status as Completed
+                await _api.UpdateJobStatusAsync(job.Id, "Completed");
+                await _api.SendHeartbeatAsync(_logicalPrinter, "Idle", null, true, _physicalPrinter);
+                StatusChanged?.Invoke("Idle", _logicalPrinter);
+            }
+            catch (Exception ex)
+            {
+                Logger.Error($"[JOB FAILED] Error processing job {job.Id}", ex);
+
+                // Alert strictly on errors
+                NotificationService.ShowError(
+                    "Print Job Failed",
+                    $"Document '{job.OriginalName ?? job.Filename}' failed to print on {_physicalPrinter}. {ex.Message}"
+                );
+
+                await _api.UpdateJobStatusAsync(job.Id, "Failed", ex.Message);
+                await _api.SendHeartbeatAsync(_logicalPrinter, "Error", null, true, _physicalPrinter);
+                StatusChanged?.Invoke("Error", _logicalPrinter);
+            }
+            finally
+            {
+                // Clean up ephemeral files immediately to preserve storage & privacy
+                CleanupFile(downloadedPath);
+                if (processedResult?.IsTemporary == true)
+                {
+                    CleanupFile(processedResult.FilePath);
+                }
+                _isProcessing = false;
+            }
+        }
+
+        private async Task ListenToSseStreamAsync(CancellationToken ct)
+        {
+            while (!ct.IsCancellationRequested)
+            {
+                try
+                {
+                    using var client = new HttpClient { Timeout = Timeout.InfiniteTimeSpan };
+                    if (!string.IsNullOrWhiteSpace(_config.AgentApiKey))
+                    {
+                        client.DefaultRequestHeaders.Authorization =
+                            new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", _config.AgentApiKey);
+                    }
+                    string sseUrl = $"{_config.ApiUrl.TrimEnd('/')}/print-queue/stream";
+
+                    using var stream = await client.GetStreamAsync(sseUrl, ct).ConfigureAwait(false);
+                    using var reader = new StreamReader(stream);
+
+                    _isSseConnected = true;
+                    Logger.Info("[SSE CONNECTED] Listening for instant real-time print triggers (poll timer relaxed to 25s).");
+
+                    while (!reader.EndOfStream && !ct.IsCancellationRequested)
+                    {
+                        string? line = await reader.ReadLineAsync().ConfigureAwait(false);
+                        if (!string.IsNullOrWhiteSpace(line) && line.StartsWith("data:"))
+                        {
+                            // Instant trigger received from backend!
+                            if (!_isProcessing && !_isPaused)
+                            {
+                                _ = CheckAndProcessQueueAsync();
+                            }
+                        }
+                    }
+                }
+                catch (Exception ex)
+                {
+                    _isSseConnected = false;
+                    Logger.Warn($"SSE live stream disconnected: {ex.Message}. Falling back to active {_config.PollIntervalSeconds}s polling.");
+                    await Task.Delay(10000, ct).ConfigureAwait(false); // Wait 10s before reconnecting SSE
+                }
+            }
+        }
+
+        private static void CleanupFile(string? path)
+        {
+            if (string.IsNullOrWhiteSpace(path)) return;
+            try
+            {
+                if (File.Exists(path)) File.Delete(path);
+            }
+            catch { }
+        }
+
+        public void Dispose()
+        {
+            Stop();
+            _cts.Dispose();
+        }
+    }
+}

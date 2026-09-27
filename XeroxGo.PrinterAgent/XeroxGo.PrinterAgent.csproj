@@ -1,0 +1,29 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net8.0-windows</TargetFramework>
+    <Nullable>enable</Nullable>
+    <UseWindowsForms>true</UseWindowsForms>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <ApplicationIcon></ApplicationIcon>
+    <StartupObject>XeroxGo.PrinterAgent.Program</StartupObject>
+    <AssemblyName>XeroxGo.PrinterAgent</AssemblyName>
+    <RootNamespace>XeroxGo.PrinterAgent</RootNamespace>
+    
+    <!-- Self-Contained Single-File Publish Configuration -->
+    <PublishSingleFile>true</PublishSingleFile>
+    <SelfContained>true</SelfContained>
+    <RuntimeIdentifier>win-x64</RuntimeIdentifier>
+    <IncludeNativeLibrariesForSelfExtract>true</IncludeNativeLibrariesForSelfExtract>
+    <PublishTrimmed>false</PublishTrimmed>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- PDF processing for 2-Up imposition, page rotation, exclusion and reordering -->
+    <PackageReference Include="PDFsharp" Version="6.1.1" />
+    <!-- Native Windows Spooler & GDI+ Printing -->
+    <PackageReference Include="System.Drawing.Common" Version="8.0.8" />
+  </ItemGroup>
+
+</Project>
