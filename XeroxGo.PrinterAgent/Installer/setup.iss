@@ -24,6 +24,8 @@ WizardStyle=modern
 PrivilegesRequired=lowest
 CloseApplications=yes
 RestartApplications=no
+SignTool=default
+SignedUninstaller=yes
 
 [Languages]
 Name: "english"; MessagesFile: "compiler:Default.isl"

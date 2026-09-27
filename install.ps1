@@ -81,9 +81,17 @@ function Invoke-CleanUninstall {
             if ($regProps.UninstallString) {
                 $uninstExe = $regProps.UninstallString.Trim('"')
                 if (Test-Path $uninstExe) {
-                    Start-Process -FilePath $uninstExe -ArgumentList "/SILENT", "/VERYSILENT", "/SUPPRESSMSGBOXES" -Wait
-                    Start-Sleep -Seconds 1
-                    $ranNative = $true
+                    try {
+                        if (Get-Command Unblock-File -ErrorAction SilentlyContinue) {
+                            Unblock-File -Path $uninstExe -ErrorAction SilentlyContinue
+                        }
+                        Start-Process -FilePath $uninstExe -ArgumentList "/SILENT", "/VERYSILENT", "/SUPPRESSMSGBOXES" -Wait -ErrorAction Stop
+                        Start-Sleep -Seconds 1
+                        $ranNative = $true
+                    } catch {
+                        # If Smart App Control blocks unsigned unins000.exe, fall through to direct cleanup
+                        $ranNative = $false
+                    }
                 }
             }
             Remove-Item -Path $regPath -Force -Recurse -ErrorAction SilentlyContinue
@@ -92,7 +100,7 @@ function Invoke-CleanUninstall {
     if ($ranNative) {
         Write-Host "   ✓ Uninstaller completed." -ForegroundColor Green
     } else {
-        Write-Host "   ℹ Native uninstaller not found; running direct cleanup." -ForegroundColor DarkGray
+        Write-Host "   ℹ Native uninstaller unavailable; proceeding with direct system cleanup." -ForegroundColor DarkGray
     }
 
     # 3. Clean files & directories
