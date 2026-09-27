@@ -62,7 +62,7 @@ namespace XeroxGo.PrinterAgent.Services
             Task.Run(() => HeartbeatLoopAsync(_cts.Token));
             Task.Run(() => QueuePollLoopAsync(_cts.Token));
             Task.Run(() => ListenToSseStreamAsync(_cts.Token));
-            Logger.Info($"[WORKER STARTED] Monitoring queue for printer '{_activePrinter}'");
+            Logger.Info($"[WORKER STARTED] Monitoring queue for printer '{_logicalPrinter}'");
         }
 
         public void Stop()

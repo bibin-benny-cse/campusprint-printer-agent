@@ -141,12 +141,12 @@ namespace XeroxGo.PrinterAgent.Services
                         using var gfx = XGraphics.FromPdfPage(sheet);
 
                         // Render first page on half sheet
-                        RenderPageHalf(gfx, inputDoc, pageIndices[i], 0, sideBySide, sheet.Width, sheet.Height, rotationsMap);
+                        RenderPageHalf(gfx, inputPath, pageIndices[i], 0, sideBySide, sheet.Width.Point, sheet.Height.Point, rotationsMap);
 
                         // Render second page on other half if present
                         if (i + 1 < pageIndices.Count)
                         {
-                            RenderPageHalf(gfx, inputDoc, pageIndices[i + 1], 1, sideBySide, sheet.Width, sheet.Height, rotationsMap);
+                            RenderPageHalf(gfx, inputPath, pageIndices[i + 1], 1, sideBySide, sheet.Width.Point, sheet.Height.Point, rotationsMap);
                         }
                     }
                 }
@@ -164,7 +164,7 @@ namespace XeroxGo.PrinterAgent.Services
 
         private static void RenderPageHalf(
             XGraphics gfx,
-            PdfDocument srcDoc,
+            string inputPath,
             int pageIndex,
             int slot,
             bool sideBySide,
@@ -172,7 +172,7 @@ namespace XeroxGo.PrinterAgent.Services
             double sheetHeight,
             Dictionary<string, int> rotationsMap)
         {
-            var form = new XPdfForm(srcDoc);
+            using var form = XPdfForm.FromFile(inputPath);
             form.PageNumber = pageIndex + 1;
 
             double slotWidth = sideBySide ? (sheetWidth / 2.0) : sheetWidth;
@@ -185,11 +185,14 @@ namespace XeroxGo.PrinterAgent.Services
             double availW = slotWidth - (margin * 2);
             double availH = slotHeight - (margin * 2);
 
-            double scale = Math.Min(availW / form.PixelWidth, availH / form.PixelHeight);
+            double formW = form.PixelWidth > 0 ? form.PixelWidth : form.PointWidth;
+            double formH = form.PixelHeight > 0 ? form.PixelHeight : form.PointHeight;
+
+            double scale = Math.Min(availW / formW, availH / formH);
             if (scale <= 0) scale = 1.0;
 
-            double drawW = form.PixelWidth * scale;
-            double drawH = form.PixelHeight * scale;
+            double drawW = formW * scale;
+            double drawH = formH * scale;
             double drawX = offsetX + (slotWidth - drawW) / 2.0;
             double drawY = offsetY + (slotHeight - drawH) / 2.0;
 
