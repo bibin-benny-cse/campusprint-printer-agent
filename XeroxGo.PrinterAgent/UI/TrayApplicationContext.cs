@@ -3,7 +3,6 @@ using System.Diagnostics;
 using System.Drawing;
 using System.Drawing.Drawing2D;
 using System.IO;
-using System.Runtime.InteropServices;
 using System.Windows.Forms;
 using XeroxGo.PrinterAgent.Models;
 using XeroxGo.PrinterAgent.Services;
@@ -22,9 +21,6 @@ namespace XeroxGo.PrinterAgent.UI
 
         private string _currentStatusText = "Connecting...";
         private string _currentStatusState = "idle";
-
-        [DllImport("user32.dll", CharSet = CharSet.Auto)]
-        private static extern bool DestroyIcon(IntPtr handle);
 
         public TrayApplicationContext()
         {
@@ -121,9 +117,8 @@ namespace XeroxGo.PrinterAgent.UI
                     break;
             }
 
-            var oldIcon = _trayIcon.Icon;
+            _trayIcon.Icon?.Dispose();
             _trayIcon.Icon = CreateStatusIcon(iconColor);
-            oldIcon?.Dispose();
 
             _statusHeaderItem.Text = $"{symbol} ({printerName})";
             _trayIcon.Text = $"XeroxGo: {status} ({printerName})".Substring(0, Math.Min(63, $"XeroxGo: {status} ({printerName})".Length));
@@ -223,13 +218,7 @@ namespace XeroxGo.PrinterAgent.UI
             }
 
             IntPtr hIcon = bmp.GetHicon();
-            Icon icon;
-            using (var tempIcon = Icon.FromHandle(hIcon))
-            {
-                icon = (Icon)tempIcon.Clone();
-            }
-            DestroyIcon(hIcon);
-            return icon;
+            return Icon.FromHandle(hIcon);
         }
 
         protected override void Dispose(bool disposing)

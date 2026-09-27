@@ -24,8 +24,6 @@ WizardStyle=modern
 PrivilegesRequired=lowest
 CloseApplications=yes
 RestartApplications=no
-SetupIconFile=..\Resources\app.ico
-UninstallIconFile=..\Resources\app.ico
 
 [Languages]
 Name: "english"; MessagesFile: "compiler:Default.isl"
