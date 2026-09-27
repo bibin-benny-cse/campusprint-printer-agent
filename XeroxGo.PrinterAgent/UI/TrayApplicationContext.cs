@@ -17,7 +17,7 @@ namespace XeroxGo.PrinterAgent.UI
         private readonly ToolStripMenuItem _pauseResumeItem;
         private readonly AppConfig _config;
         private readonly QueueWorker _worker;
-        private SettingsForm? _settingsForm;
+        private SettingsWindow? _settingsWindow;
 
         private string _currentStatusText = "Connecting...";
         private string _currentStatusState = "idle";
@@ -117,6 +117,15 @@ namespace XeroxGo.PrinterAgent.UI
             _trayIcon.Icon = CreateStatusIcon(iconColor);
             _statusHeaderItem.Text = $"{symbol} ({printerName})";
             _trayIcon.Text = $"XeroxGo: {status} ({printerName})".Substring(0, Math.Min(63, $"XeroxGo: {status} ({printerName})".Length));
+
+            // Sync open SettingsWindow in real-time
+            if (_settingsWindow != null && _settingsWindow.IsLoaded)
+            {
+                _settingsWindow.Dispatcher.Invoke(() =>
+                {
+                    _settingsWindow.UpdateStatusPill(_currentStatusText, _currentStatusState);
+                });
+            }
         }
 
         private void OnTogglePause(object? sender, EventArgs e)
@@ -127,9 +136,9 @@ namespace XeroxGo.PrinterAgent.UI
 
         private void OnOpenSettings(object? sender, EventArgs e)
         {
-            if (_settingsForm == null || _settingsForm.IsDisposed)
+            if (_settingsWindow == null || !_settingsWindow.IsLoaded)
             {
-                _settingsForm = new SettingsForm(
+                _settingsWindow = new SettingsWindow(
                     _config,
                     (newConfig) =>
                     {
@@ -138,11 +147,15 @@ namespace XeroxGo.PrinterAgent.UI
                     _currentStatusText,
                     _currentStatusState
                 );
+                _settingsWindow.Closed += (s, ev) => _settingsWindow = null;
             }
 
-            _settingsForm.Show();
-            _settingsForm.BringToFront();
-            _settingsForm.Activate();
+            _settingsWindow.Show();
+            if (_settingsWindow.WindowState == System.Windows.WindowState.Minimized)
+            {
+                _settingsWindow.WindowState = System.Windows.WindowState.Normal;
+            }
+            _settingsWindow.Activate();
         }
 
         private void OnViewLogs(object? sender, EventArgs e)

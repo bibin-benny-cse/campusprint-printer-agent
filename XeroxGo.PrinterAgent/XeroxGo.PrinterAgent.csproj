@@ -8,13 +8,14 @@
     <UseWPF>true</UseWPF>
     <ImplicitUsings>enable</ImplicitUsings>
     <ApplicationIcon></ApplicationIcon>
+    <ApplicationManifest>app.manifest</ApplicationManifest>
     <StartupObject>XeroxGo.PrinterAgent.Program</StartupObject>
     <AssemblyName>XeroxGo.PrinterAgent</AssemblyName>
     <RootNamespace>XeroxGo.PrinterAgent</RootNamespace>
     
-    <Version>0.1.1</Version>
-    <AssemblyVersion>0.1.1.0</AssemblyVersion>
-    <FileVersion>0.1.1.0</FileVersion>
+    <Version>0.1.2</Version>
+    <AssemblyVersion>0.1.2.0</AssemblyVersion>
+    <FileVersion>0.1.2.0</FileVersion>
     <Product>XeroxGo Windows Printer Agent</Product>
     <Company>XeroxGo Technologies</Company>
     

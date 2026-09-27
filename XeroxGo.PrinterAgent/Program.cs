@@ -44,9 +44,19 @@ namespace XeroxGo.PrinterAgent
                 }
             };
 
-            // 3. High-DPI and Modern Windows Styling
+            // 3. High-DPI and Modern Windows Styling (Per-Monitor V2 prevents blur on scaled displays)
+            Application.SetHighDpiMode(HighDpiMode.PerMonitorV2);
             Application.EnableVisualStyles();
             Application.SetCompatibleTextRenderingDefault(false);
+
+            // Initialize WPF Application Context for Fluent vector windows
+            if (System.Windows.Application.Current == null)
+            {
+                _ = new System.Windows.Application
+                {
+                    ShutdownMode = System.Windows.ShutdownMode.OnExplicitShutdown
+                };
+            }
 
             try
             {
