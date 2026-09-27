@@ -1,0 +1,96 @@
+using System;
+using System.Drawing;
+using System.Linq;
+using System.Reflection;
+
+namespace XeroxGo.PrinterAgent.UI
+{
+    /// <summary>
+    /// Centralized provider for official XeroxGo branding assets (Logo and Application Icons).
+    /// Dynamically loads embedded high-resolution assets with thread-safe caching.
+    /// </summary>
+    public static class BrandAssets
+    {
+        private static Image? _logo;
+        private static Icon? _appIcon;
+        private static readonly object _lock = new object();
+
+        /// <summary>
+        /// Official high-resolution XeroxGo emblem logo.
+        /// </summary>
+        public static Image? Logo
+        {
+            get
+            {
+                if (_logo == null)
+                {
+                    lock (_lock)
+                    {
+                        if (_logo == null)
+                        {
+                            try
+                            {
+                                var assembly = Assembly.GetExecutingAssembly();
+                                var resName = assembly.GetManifestResourceNames()
+                                    .FirstOrDefault(n => n.EndsWith("logo.png", StringComparison.OrdinalIgnoreCase));
+
+                                if (!string.IsNullOrEmpty(resName))
+                                {
+                                    using var stream = assembly.GetManifestResourceStream(resName);
+                                    if (stream != null)
+                                    {
+                                        _logo = Image.FromStream(stream);
+                                    }
+                                }
+                            }
+                            catch
+                            {
+                                // Graceful fallback
+                            }
+                        }
+                    }
+                }
+                return _logo;
+            }
+        }
+
+        /// <summary>
+        /// Official multi-resolution Windows application icon (16x16 up to 256x256).
+        /// </summary>
+        public static Icon? AppIcon
+        {
+            get
+            {
+                if (_appIcon == null)
+                {
+                    lock (_lock)
+                    {
+                        if (_appIcon == null)
+                        {
+                            try
+                            {
+                                var assembly = Assembly.GetExecutingAssembly();
+                                var resName = assembly.GetManifestResourceNames()
+                                    .FirstOrDefault(n => n.EndsWith("app.ico", StringComparison.OrdinalIgnoreCase));
+
+                                if (!string.IsNullOrEmpty(resName))
+                                {
+                                    using var stream = assembly.GetManifestResourceStream(resName);
+                                    if (stream != null)
+                                    {
+                                        _appIcon = new Icon(stream);
+                                    }
+                                }
+                            }
+                            catch
+                            {
+                                // Graceful fallback
+                            }
+                        }
+                    }
+                }
+                return _appIcon;
+            }
+        }
+    }
+}

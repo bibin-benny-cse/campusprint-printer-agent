@@ -3,6 +3,7 @@ using System.Diagnostics;
 using System.Drawing;
 using System.Drawing.Drawing2D;
 using System.IO;
+using System.Runtime.InteropServices;
 using System.Windows.Forms;
 using XeroxGo.PrinterAgent.Models;
 using XeroxGo.PrinterAgent.Services;
@@ -21,6 +22,9 @@ namespace XeroxGo.PrinterAgent.UI
 
         private string _currentStatusText = "Connecting...";
         private string _currentStatusState = "idle";
+
+        [DllImport("user32.dll", CharSet = CharSet.Auto)]
+        private static extern bool DestroyIcon(IntPtr handle);
 
         public TrayApplicationContext()
         {
@@ -117,7 +121,10 @@ namespace XeroxGo.PrinterAgent.UI
                     break;
             }
 
+            var oldIcon = _trayIcon.Icon;
             _trayIcon.Icon = CreateStatusIcon(iconColor);
+            oldIcon?.Dispose();
+
             _statusHeaderItem.Text = $"{symbol} ({printerName})";
             _trayIcon.Text = $"XeroxGo: {status} ({printerName})".Substring(0, Math.Min(63, $"XeroxGo: {status} ({printerName})".Length));
 
@@ -186,35 +193,50 @@ namespace XeroxGo.PrinterAgent.UI
             Application.Exit();
         }
 
-        private static Icon CreateStatusIcon(Color ringColor)
+        private static Icon CreateStatusIcon(Color statusColor)
         {
             using var bmp = new Bitmap(32, 32);
             using (var g = Graphics.FromImage(bmp))
             {
                 g.SmoothingMode = SmoothingMode.AntiAlias;
+                g.InterpolationMode = InterpolationMode.HighQualityBicubic;
+                g.PixelOffsetMode = PixelOffsetMode.HighQuality;
                 g.Clear(Color.Transparent);
 
-                // Draw modern round badge
-                using var brush = new SolidBrush(ringColor);
-                g.FillEllipse(brush, 2, 2, 28, 28);
+                // 1. Draw XeroxGo Logo Tile
+                if (BrandAssets.Logo != null)
+                {
+                    g.DrawImage(BrandAssets.Logo, new Rectangle(0, 0, 27, 27));
+                }
+                else
+                {
+                    using var fallbackBrush = new SolidBrush(Color.FromArgb(0, 103, 192));
+                    g.FillEllipse(fallbackBrush, 1, 1, 26, 26);
+                }
 
-                // Draw printer glyph outline in white
-                using var pen = new Pen(Color.White, 2.5f);
-                g.DrawRectangle(pen, 8, 12, 16, 12);
-                g.DrawLine(pen, 11, 8, 21, 8);
-                g.DrawLine(pen, 11, 8, 11, 12);
-                g.DrawLine(pen, 21, 8, 21, 12);
-                g.FillRectangle(Brushes.White, 12, 18, 8, 2);
+                // 2. Draw dynamic status dot in bottom-right corner with white halo
+                using var haloBrush = new SolidBrush(Color.White);
+                g.FillEllipse(haloBrush, 18f, 18f, 12f, 12f);
+
+                using var statusBrush = new SolidBrush(statusColor);
+                g.FillEllipse(statusBrush, 19.5f, 19.5f, 9f, 9f);
             }
 
             IntPtr hIcon = bmp.GetHicon();
-            return Icon.FromHandle(hIcon);
+            Icon icon;
+            using (var tempIcon = Icon.FromHandle(hIcon))
+            {
+                icon = (Icon)tempIcon.Clone();
+            }
+            DestroyIcon(hIcon);
+            return icon;
         }
 
         protected override void Dispose(bool disposing)
         {
             if (disposing)
             {
+                _trayIcon.Icon?.Dispose();
                 _trayIcon.Dispose();
                 _contextMenu.Dispose();
                 _worker.Dispose();

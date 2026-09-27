@@ -6,7 +6,7 @@
     <Nullable>enable</Nullable>
     <UseWindowsForms>true</UseWindowsForms>
     <ImplicitUsings>enable</ImplicitUsings>
-    <ApplicationIcon></ApplicationIcon>
+    <ApplicationIcon>Resources\app.ico</ApplicationIcon>
     <ApplicationManifest>app.manifest</ApplicationManifest>
     <StartupObject>XeroxGo.PrinterAgent.Program</StartupObject>
     <AssemblyName>XeroxGo.PrinterAgent</AssemblyName>
@@ -39,6 +39,11 @@
     <PackageReference Include="PDFsharp" Version="6.1.1" />
     <!-- Native Windows Spooler & GDI+ Printing -->
     <PackageReference Include="System.Drawing.Common" Version="8.0.8" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <EmbeddedResource Include="Resources\logo.png" />
+    <EmbeddedResource Include="Resources\app.ico" />
   </ItemGroup>
 
 </Project>

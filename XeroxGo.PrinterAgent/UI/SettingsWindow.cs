@@ -62,6 +62,11 @@ namespace XeroxGo.PrinterAgent.UI
             Font = FluentTheme.Font(9.5f);
             AutoScaleMode = AutoScaleMode.Dpi;
 
+            if (BrandAssets.AppIcon != null)
+            {
+                Icon = BrandAssets.AppIcon;
+            }
+
             int marginX = 24;
             int contentWidth = ClientSize.Width - (marginX * 2);
             int currentY = 18;
@@ -76,7 +81,7 @@ namespace XeroxGo.PrinterAgent.UI
                 BackColor = FluentTheme.Background
             };
 
-            // Modern Blue Logo Icon
+            // Official XeroxGo Logo Icon
             var logoBox = new PictureBox
             {
                 Location = new Point(0, 7),
@@ -87,6 +92,7 @@ namespace XeroxGo.PrinterAgent.UI
             {
                 var g = e.Graphics;
                 g.SmoothingMode = SmoothingMode.AntiAlias;
+                g.InterpolationMode = InterpolationMode.HighQualityBicubic;
                 g.PixelOffsetMode = PixelOffsetMode.HighQuality;
 
                 using (var bgBrush = new SolidBrush(FluentTheme.Background))
@@ -94,41 +100,16 @@ namespace XeroxGo.PrinterAgent.UI
                     g.FillRectangle(bgBrush, logoBox.ClientRectangle);
                 }
 
-                var fillRect = new RectangleF(0, 0, 40, 40);
-                using var path = FluentTheme.CreateRoundedPath(fillRect, 8f);
-                using var brush = new LinearGradientBrush(fillRect, Color.FromArgb(0, 103, 192), Color.FromArgb(37, 99, 235), 90);
-                g.FillPath(brush, path);
+                if (BrandAssets.Logo != null)
+                {
+                    g.DrawImage(BrandAssets.Logo, new Rectangle(0, 0, logoBox.Width, logoBox.Height));
+                }
 
-                // Inset subtle glass border
-                var strokeRect = new RectangleF(0.5f, 0.5f, 39, 39);
-                using var strokePath = FluentTheme.CreateRoundedPath(strokeRect, 7.5f);
-                using var borderPen = new Pen(Color.FromArgb(40, 255, 255, 255), 1f);
+                // Subtle 1px rounded border matching Windows 11 Fluent cards
+                var strokeRect = new RectangleF(0.5f, 0.5f, logoBox.Width - 1f, logoBox.Height - 1f);
+                using var strokePath = FluentTheme.CreateRoundedPath(strokeRect, 8f);
+                using var borderPen = new Pen(Color.FromArgb(226, 232, 240), 1f); // Slate 200
                 g.DrawPath(borderPen, strokePath);
-
-                // Crisp vector printer glyph
-                using var whiteBrush = new SolidBrush(Color.White);
-                using var whitePen = new Pen(Color.White, 1.4f) { StartCap = LineCap.Round, EndCap = LineCap.Round };
-
-                // 1. Paper input tray (top)
-                g.DrawRectangle(whitePen, 13, 9, 14, 6);
-
-                // 2. Main printer chassis (middle)
-                var bodyRect = new RectangleF(9, 15, 22, 13);
-                using var bodyPath = FluentTheme.CreateRoundedPath(bodyRect, 2f);
-                g.FillPath(whiteBrush, bodyPath);
-
-                // 3. Status LED dot
-                using var ledBrush = new SolidBrush(Color.FromArgb(16, 185, 129));
-                g.FillEllipse(ledBrush, 12, 18, 2.5f, 2.5f);
-
-                // 4. Paper output slot & sheet
-                using var blueBrush = new SolidBrush(Color.FromArgb(0, 103, 192));
-                g.FillRectangle(blueBrush, 13, 21, 14, 2);
-
-                using var paperBrush = new SolidBrush(Color.FromArgb(241, 245, 249));
-                g.FillRectangle(paperBrush, 13, 23, 14, 4);
-                using var linePen = new Pen(Color.FromArgb(148, 163, 184), 1f);
-                g.DrawLine(linePen, 15, 25, 23, 25);
             };
             _headerPanel.Controls.Add(logoBox);
 
