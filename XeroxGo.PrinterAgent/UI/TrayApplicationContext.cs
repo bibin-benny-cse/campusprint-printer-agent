@@ -17,6 +17,7 @@ namespace XeroxGo.PrinterAgent.UI
         private readonly ToolStripMenuItem _pauseResumeItem;
         private readonly AppConfig _config;
         private readonly QueueWorker _worker;
+        private readonly DeviceChangeNotifier _deviceNotifier;
         private SettingsWindow? _settingsWindow;
 
         private string _currentStatusText = "Connecting...";
@@ -76,6 +77,13 @@ namespace XeroxGo.PrinterAgent.UI
             {
                 StartupManager.SetAutoStart(_config.AutoStartWithWindows);
             }
+
+            // Listen for native Windows Plug & Play hardware changes (USB printer plugged in/out)
+            _deviceNotifier = new DeviceChangeNotifier(() =>
+            {
+                Logger.Info("[PnP] Windows hardware change detected. Syncing printer inventory...");
+                _ = _worker.SendPrinterInventoryAsync();
+            });
 
             // Start silent periodic update check (initial 30s delay, every 8h)
             UpdateService.StartPeriodicChecker(OnBackgroundUpdateFound);
@@ -151,7 +159,8 @@ namespace XeroxGo.PrinterAgent.UI
                         _worker.ReloadConfiguration(newConfig);
                     },
                     _currentStatusText,
-                    _currentStatusState
+                    _currentStatusState,
+                    () => { _ = _worker.SendPrinterInventoryAsync(); }
                 );
                 _settingsWindow.FormClosed += (s, ev) =>
                 {
@@ -293,12 +302,46 @@ namespace XeroxGo.PrinterAgent.UI
         {
             if (disposing)
             {
+                _deviceNotifier.Dispose();
                 _trayIcon.Icon?.Dispose();
                 _trayIcon.Dispose();
                 _contextMenu.Dispose();
                 _worker.Dispose();
             }
             base.Dispose(disposing);
+        }
+    }
+
+    /// <summary>
+    /// Listens for native Windows WM_DEVICECHANGE (0x0219) messages.
+    /// Fires when USB printers or external devices are plugged in or unplugged.
+    /// </summary>
+    internal class DeviceChangeNotifier : NativeWindow, IDisposable
+    {
+        private const int WM_DEVICECHANGE = 0x0219;
+        private readonly Action _onDeviceChanged;
+        private System.Threading.Timer? _debounceTimer;
+
+        public DeviceChangeNotifier(Action onDeviceChanged)
+        {
+            _onDeviceChanged = onDeviceChanged;
+            CreateHandle(new CreateParams());
+        }
+
+        protected override void WndProc(ref Message m)
+        {
+            if (m.Msg == WM_DEVICECHANGE)
+            {
+                _debounceTimer?.Dispose();
+                _debounceTimer = new System.Threading.Timer(_ => _onDeviceChanged(), null, 2500, Timeout.Infinite);
+            }
+            base.WndProc(ref m);
+        }
+
+        public void Dispose()
+        {
+            _debounceTimer?.Dispose();
+            DestroyHandle();
         }
     }
 }

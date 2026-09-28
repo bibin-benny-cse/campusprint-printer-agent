@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Net.Http;
+using System.Net.Http.Json;
 using System.Text;
 using System.Text.Json;
 using System.Threading.Tasks;
@@ -64,8 +65,7 @@ namespace XeroxGo.PrinterAgent.Services
                     });
                 }
 
-                string json = JsonSerializer.Serialize(payload);
-                using var content = new StringContent(json, Encoding.UTF8, "application/json");
+                using var content = JsonContent.Create(payload);
                 using var res = await _http.PostAsync("printers/heartbeat", content);
 
                 return res.IsSuccessStatusCode;

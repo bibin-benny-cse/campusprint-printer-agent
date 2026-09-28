@@ -19,6 +19,7 @@ namespace XeroxGo.PrinterAgent.UI
     {
         private readonly AppConfig _config;
         private readonly Action<AppConfig> _onSaveCallback;
+        private readonly Action? _onRefreshPrintersCallback;
         private readonly Font _headerTitleFont = FluentTheme.Font(12.5f, FontStyle.Bold);
         private readonly Font _headerSubFont = FluentTheme.Font(8.5f, FontStyle.Regular);
 
@@ -39,10 +40,16 @@ namespace XeroxGo.PrinterAgent.UI
         private FluentButton _btnCancel = null!;
         private Panel _headerPanel = null!;
 
-        public SettingsWindow(AppConfig config, Action<AppConfig> onSaveCallback, string currentStatus = "Connected to Cloud", string statusState = "idle")
+        public SettingsWindow(
+            AppConfig config, 
+            Action<AppConfig> onSaveCallback, 
+            string currentStatus = "Connected to Cloud", 
+            string statusState = "idle",
+            Action? onRefreshPrintersCallback = null)
         {
             _config = config;
             _onSaveCallback = onSaveCallback;
+            _onRefreshPrintersCallback = onRefreshPrintersCallback;
 
             InitializeComponent(currentStatus, statusState);
             LoadConfiguration();
@@ -238,7 +245,11 @@ namespace XeroxGo.PrinterAgent.UI
                 Size = new Size(80, 26),
                 IsPrimary = false
             };
-            _btnRefreshPrinters.Click += (s, e) => PopulateDiscoveredPrinters();
+            _btnRefreshPrinters.Click += (s, e) =>
+            {
+                PopulateDiscoveredPrinters();
+                _onRefreshPrintersCallback?.Invoke();
+            };
             cardHardware.Controls.Add(_btnRefreshPrinters);
 
             _panelPrinters = new Panel

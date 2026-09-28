@@ -54,10 +54,10 @@ namespace XeroxGo.PrinterAgent.Services
         public void Start()
         {
             _cts = new CancellationTokenSource();
-            Task.Run(() => HeartbeatLoopAsync(_cts.Token));
             Task.Run(() => QueuePollLoopAsync(_cts.Token));
             Task.Run(() => ListenToSseStreamAsync(_cts.Token));
-            Logger.Info("[WORKER STARTED] Multi-printer auto-discovery daemon running.");
+            Task.Run(() => SendPrinterInventoryAsync());
+            Logger.Info("[WORKER STARTED] Event-driven multi-printer agent running.");
         }
 
         public void Stop()
@@ -66,54 +66,66 @@ namespace XeroxGo.PrinterAgent.Services
             Logger.Info("[WORKER STOPPED]");
         }
 
-        private async Task HeartbeatLoopAsync(CancellationToken ct)
+        private readonly SemaphoreSlim _inventoryLock = new(1, 1);
+
+        /// <summary>
+        /// Scans connected physical printers and pushes the inventory to the cloud on-demand.
+        /// Invoked on startup, admin panel refresh, local UI refresh, and USB Plug & Play events.
+        /// </summary>
+        public async Task<bool> SendPrinterInventoryAsync()
         {
-            while (!ct.IsCancellationRequested)
+            if (!await _inventoryLock.WaitAsync(0)) return false;
+
+            try
             {
-                try
+                var printers = HardwareMonitor.DiscoverAllPrinters();
+
+                bool ok = await _api.SendMultiHeartbeatAsync(
+                    printers,
+                    _currentJobId,
+                    _activePrinterName
+                );
+
+                if (ok)
                 {
-                    var printers = HardwareMonitor.DiscoverAllPrinters();
-
-                    bool ok = await _api.SendMultiHeartbeatAsync(
-                        printers,
-                        _currentJobId,
-                        _activePrinterName
-                    );
-
-                    if (ok)
+                    if (_consecutiveFailures > 0)
                     {
-                        if (_consecutiveFailures > 0)
-                        {
-                            Logger.Info("[BACKEND RECONNECTED] Backend connection restored.");
-                            _consecutiveFailures = 0;
-                        }
+                        Logger.Info("[BACKEND RECONNECTED] Backend connection restored.");
+                        _consecutiveFailures = 0;
+                    }
 
-                        if (!_isProcessing && !_isPaused)
-                        {
-                            string summary = printers.Count > 0 
-                                ? $"{printers.Count} Printer{(printers.Count == 1 ? "" : "s")} Ready" 
-                                : "No Printers Detected";
-                            StatusChanged?.Invoke("Idle", summary);
-                        }
-                    }
-                    else
+                    if (!_isProcessing && !_isPaused)
                     {
-                        _consecutiveFailures++;
-                        if (_consecutiveFailures == 10) // ~50s of persistent offline
-                        {
-                            NotificationService.ShowCritical(
-                                "Backend Disconnected",
-                                "Cannot connect to XeroxGo cloud server. Please check your internet connection."
-                            );
-                        }
+                        string summary = printers.Count > 0 
+                            ? $"{printers.Count} Printer{(printers.Count == 1 ? "" : "s")} Ready" 
+                            : "No Printers Detected";
+                        StatusChanged?.Invoke("Idle", summary);
                     }
+                    Logger.Info($"[PRINTER INVENTORY SYNCED] Sent {printers.Count} printer(s) to cloud.");
                 }
-                catch (Exception ex)
+                else
                 {
-                    Logger.Warn($"Heartbeat loop exception: {ex.Message}");
+                    _consecutiveFailures++;
+                    if (_consecutiveFailures == 10)
+                    {
+                        NotificationService.ShowCritical(
+                            "Backend Disconnected",
+                            "Cannot connect to XeroxGo cloud server. Please check your internet connection."
+                        );
+                    }
+                    Logger.Warn("[PRINTER INVENTORY SYNC FAILED] Could not send printer inventory to cloud.");
                 }
 
-                await Task.Delay(_config.HeartbeatIntervalSeconds * 1000, ct).ConfigureAwait(false);
+                return ok;
+            }
+            catch (Exception ex)
+            {
+                Logger.Warn($"Printer inventory sync exception: {ex.Message}");
+                return false;
+            }
+            finally
+            {
+                _inventoryLock.Release();
             }
         }
 
@@ -217,7 +229,7 @@ namespace XeroxGo.PrinterAgent.Services
                 await _api.UpdateJobStatusAsync(job.Id, "Completed");
                 _currentJobId = null;
                 _activePrinterName = null;
-                _ = _api.SendMultiHeartbeatAsync(discoveredPrinters);
+                _ = SendPrinterInventoryAsync();
 
                 StatusChanged?.Invoke("Idle", $"{discoveredPrinters.Count} Printers Ready");
             }
@@ -233,7 +245,7 @@ namespace XeroxGo.PrinterAgent.Services
                 await _api.UpdateJobStatusAsync(job.Id, "Failed", ex.Message);
                 _currentJobId = null;
                 _activePrinterName = null;
-                _ = _api.SendMultiHeartbeatAsync(discoveredPrinters);
+                _ = SendPrinterInventoryAsync();
 
                 StatusChanged?.Invoke("Error", "Print Error");
             }
@@ -271,13 +283,20 @@ namespace XeroxGo.PrinterAgent.Services
 
                     _isSseConnected = true;
                     Logger.Info("[SSE CONNECTED] Listening for instant real-time print triggers.");
+                    _ = SendPrinterInventoryAsync();
 
                     while (!reader.EndOfStream && !ct.IsCancellationRequested)
                     {
                         string? line = await reader.ReadLineAsync().ConfigureAwait(false);
                         if (!string.IsNullOrWhiteSpace(line) && line.StartsWith("data:"))
                         {
-                            if (!_isProcessing && !_isPaused)
+                            string data = line.Substring(5).Trim();
+                            if (data.Contains("REFRESH_PRINTERS"))
+                            {
+                                Logger.Info("[SSE] Received REFRESH_PRINTERS instruction from cloud. Refreshing hardware inventory...");
+                                _ = SendPrinterInventoryAsync();
+                            }
+                            else if (!_isProcessing && !_isPaused)
                             {
                                 _ = CheckAndProcessQueueAsync();
                             }
