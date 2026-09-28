@@ -1,3 +1,5 @@
+using System;
+using System.Collections.Generic;
 using System.Text.Json.Serialization;
 
 namespace XeroxGo.PrinterAgent.Models
@@ -72,6 +74,56 @@ namespace XeroxGo.PrinterAgent.Models
 
         [JsonPropertyName("assigned_printer_name")]
         public string? AssignedPrinterName { get; set; }
+
+        [JsonPropertyName("printer_name")]
+        public string? PrinterName { get; set; }
+
+        [JsonIgnore]
+        public string? TargetPrinterName => !string.IsNullOrWhiteSpace(PrinterName) 
+            ? PrinterName 
+            : AssignedPrinterName;
+    }
+
+    public class PrinterTelemetryItem
+    {
+        [JsonPropertyName("name")]
+        public string Name { get; set; } = "";
+
+        [JsonPropertyName("driverName")]
+        public string? DriverName { get; set; }
+
+        [JsonPropertyName("isDefault")]
+        public bool IsDefault { get; set; }
+
+        [JsonPropertyName("isOnline")]
+        public bool IsOnline { get; set; } = true;
+
+        [JsonPropertyName("supportsColor")]
+        public bool SupportsColor { get; set; } = false;
+
+        [JsonPropertyName("status")]
+        public string Status { get; set; } = "Idle";
+
+        [JsonPropertyName("isPaperJammed")]
+        public bool IsPaperJammed { get; set; } = false;
+
+        [JsonPropertyName("isOutOfPaper")]
+        public bool IsOutOfPaper { get; set; } = false;
+
+        [JsonPropertyName("isPaused")]
+        public bool IsPaused { get; set; } = false;
+
+        [JsonPropertyName("currentJobId")]
+        public long? CurrentJobId { get; set; }
+    }
+
+    public class MultiPrinterHeartbeatPayload
+    {
+        [JsonPropertyName("systemName")]
+        public string SystemName { get; set; } = Environment.MachineName;
+
+        [JsonPropertyName("printers")]
+        public List<PrinterTelemetryItem> Printers { get; set; } = new();
     }
 
     public class HeartbeatPayload

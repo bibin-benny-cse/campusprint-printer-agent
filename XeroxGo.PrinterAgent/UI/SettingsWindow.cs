@@ -1,7 +1,9 @@
 using System;
+using System.Collections.Generic;
 using System.Drawing;
 using System.Drawing.Drawing2D;
 using System.Drawing.Text;
+using System.Linq;
 using System.Windows.Forms;
 using XeroxGo.PrinterAgent.Models;
 using XeroxGo.PrinterAgent.Services;
@@ -11,6 +13,7 @@ namespace XeroxGo.PrinterAgent.UI
     /// <summary>
     /// Professional Windows 11 Fluent 2 configuration dialog for XeroxGo Agent.
     /// Uses native GDI+ rendering (zero WPF / DirectX overhead, ~10MB working set).
+    /// Features Zero-Config Multi-Printer Auto-Discovery.
     /// </summary>
     public class SettingsWindow : Form
     {
@@ -24,8 +27,8 @@ namespace XeroxGo.PrinterAgent.UI
         private FluentButton _btnToggleKey = null!;
         private bool _isKeyRevealed = false;
 
-        private FluentComboBox _cmbLogicalSlot = null!;
-        private FluentComboBox _cmbPhysicalPrinters = null!;
+        private Panel _panelPrinters = null!;
+        private FluentButton _btnRefreshPrinters = null!;
 
         private FluentComboBox _cmbPollInterval = null!;
         private FluentCheckBox _chkAutoStart = null!;
@@ -67,7 +70,7 @@ namespace XeroxGo.PrinterAgent.UI
 
             Text = string.Empty;
             ShowIcon = false;
-            ClientSize = new Size(560, 642);
+            ClientSize = new Size(560, 660);
             FormBorderStyle = FormBorderStyle.FixedDialog;
             MaximizeBox = false;
             MinimizeBox = false;
@@ -95,54 +98,41 @@ namespace XeroxGo.PrinterAgent.UI
                 BackColor = FluentTheme.Background
             };
 
-            // Direct GDI+ ClearType rendering ensures zero bounding box clipping between title and subtitle
             _headerPanel.Paint += (s, e) =>
             {
                 var g = e.Graphics;
+                g.SmoothingMode = SmoothingMode.AntiAlias;
                 g.TextRenderingHint = TextRenderingHint.ClearTypeGridFit;
 
-                TextRenderer.DrawText(g, "XeroxGo Agent", _headerTitleFont, new Point(74, -4), FluentTheme.TextPrimary, TextFormatFlags.NoPadding | TextFormatFlags.SingleLine);
-                TextRenderer.DrawText(g, "By Unnamed Enterprises", _headerSubFont, new Point(74, 20), FluentTheme.TextSecondary, TextFormatFlags.NoPadding | TextFormatFlags.SingleLine);
-            };
+                int logoSize = 34;
+                int logoY = 3;
+                int textX = logoSize + 12;
 
-            // Official XeroxGo Logo (Transparent Emblem)
-            var logoBox = new PictureBox
-            {
-                Location = new Point(0, 3),
-                Size = new Size(63, 32),
-                BackColor = Color.Transparent
-            };
-            logoBox.Paint += (s, e) =>
-            {
-                var g = e.Graphics;
-                g.SmoothingMode = SmoothingMode.AntiAlias;
-                g.InterpolationMode = InterpolationMode.HighQualityBicubic;
-                g.PixelOffsetMode = PixelOffsetMode.HighQuality;
-
-                using (var bgBrush = new SolidBrush(FluentTheme.Background))
+                if (BrandAssets.LogoGlyph != null)
                 {
-                    g.FillRectangle(bgBrush, logoBox.ClientRectangle);
+                    g.DrawImage(BrandAssets.LogoGlyph, new Rectangle(0, logoY, logoSize, logoSize));
                 }
 
-                var logo = BrandAssets.LogoGlyph ?? BrandAssets.Logo;
-                if (logo != null)
-                {
-                    g.DrawImage(logo, new Rectangle(0, 0, logoBox.Width, logoBox.Height));
-                }
-            };
-            _headerPanel.Controls.Add(logoBox);
+                float titleY = logoY;
+                g.DrawString("XeroxGo Agent", _headerTitleFont, new SolidBrush(FluentTheme.TextPrimary), textX, titleY);
 
-            // Status Badge (Top Right) - vertically centered with XG logo (center Y = 19)
-            _statusBadge = new FluentStatusBadge();
+                float subY = logoY + 18f;
+                g.DrawString("By Unnamed Enterprises", _headerSubFont, new SolidBrush(FluentTheme.TextSecondary), textX, subY);
+            };
+
+            _statusBadge = new FluentStatusBadge
+            {
+                Size = new Size(130, 26)
+            };
             _statusBadge.SetStatus(currentStatus, statusState);
             _statusBadge.Location = new Point(contentWidth - _statusBadge.Width, 5);
             _headerPanel.Controls.Add(_statusBadge);
 
             Controls.Add(_headerPanel);
-            currentY += 52;
+            currentY += 46;
 
             // ==========================================
-            // 2. Card 1: Cloud Backend
+            // 2. Card 1: Cloud Connection & Pairing
             // ==========================================
             var cardCloud = new FluentCard
             {
@@ -152,7 +142,7 @@ namespace XeroxGo.PrinterAgent.UI
 
             var lblCloudHeader = new Label
             {
-                Text = "Cloud Backend",
+                Text = "Cloud Connection & Store Pairing",
                 Font = FluentTheme.Font(10.5f, FontStyle.Bold),
                 ForeColor = FluentTheme.TextPrimary,
                 Location = new Point(18, 14),
@@ -179,7 +169,7 @@ namespace XeroxGo.PrinterAgent.UI
 
             var lblApiKey = new Label
             {
-                Text = "Agent API Key / Secret",
+                Text = "Store Agent API Key / Token",
                 Font = FluentTheme.Font(9f),
                 ForeColor = FluentTheme.TextSecondary,
                 Location = new Point(18, 102),
@@ -210,17 +200,17 @@ namespace XeroxGo.PrinterAgent.UI
             currentY += 184;
 
             // ==========================================
-            // 3. Card 2: Hardware & Routing
+            // 3. Card 2: Connected Hardware & Discovery (Zero-Config)
             // ==========================================
             var cardHardware = new FluentCard
             {
                 Location = new Point(marginX, currentY),
-                Size = new Size(contentWidth, 172)
+                Size = new Size(contentWidth, 190)
             };
 
             var lblHwHeader = new Label
             {
-                Text = "Hardware & Routing",
+                Text = "Connected Printers (Auto-Discovered)",
                 Font = FluentTheme.Font(10.5f, FontStyle.Bold),
                 ForeColor = FluentTheme.TextPrimary,
                 Location = new Point(18, 14),
@@ -228,45 +218,37 @@ namespace XeroxGo.PrinterAgent.UI
             };
             cardHardware.Controls.Add(lblHwHeader);
 
-            var lblSlot = new Label
+            _btnRefreshPrinters = new FluentButton
             {
-                Text = "Logical Printer Slot (Cloud Station)",
-                Font = FluentTheme.Font(9f),
+                Text = "Refresh",
+                Location = new Point(contentWidth - 18 - 84, 10),
+                Size = new Size(84, 26),
+                IsPrimary = false
+            };
+            _btnRefreshPrinters.Click += (s, e) => PopulateDiscoveredPrinters();
+            cardHardware.Controls.Add(_btnRefreshPrinters);
+
+            var lblHwSub = new Label
+            {
+                Text = "Zero setup needed. Connected printers are auto-synced with your XeroxGo dashboard.",
+                Font = FluentTheme.Font(8.5f),
                 ForeColor = FluentTheme.TextSecondary,
-                Location = new Point(18, 40),
+                Location = new Point(18, 38),
                 AutoSize = true
             };
-            cardHardware.Controls.Add(lblSlot);
+            cardHardware.Controls.Add(lblHwSub);
 
-            _cmbLogicalSlot = new FluentComboBox
+            _panelPrinters = new Panel
             {
                 Location = new Point(18, 60),
-                Size = new Size(contentWidth - 36, 32),
-                DropDownStyle = ComboBoxStyle.DropDownList
+                Size = new Size(contentWidth - 36, 116),
+                AutoScroll = true,
+                BackColor = Color.FromArgb(248, 250, 252)
             };
-            _cmbLogicalSlot.Items.AddRange(new object[] { "Primary", "Secondary", "Counter 1", "Counter 2", "Color Station", "BW Station" });
-            cardHardware.Controls.Add(_cmbLogicalSlot);
-
-            var lblPhysical = new Label
-            {
-                Text = "Physical Windows Spooler Driver",
-                Font = FluentTheme.Font(9f),
-                ForeColor = FluentTheme.TextSecondary,
-                Location = new Point(18, 102),
-                AutoSize = true
-            };
-            cardHardware.Controls.Add(lblPhysical);
-
-            _cmbPhysicalPrinters = new FluentComboBox
-            {
-                Location = new Point(18, 122),
-                Size = new Size(contentWidth - 36, 32),
-                DropDownStyle = ComboBoxStyle.DropDownList
-            };
-            cardHardware.Controls.Add(_cmbPhysicalPrinters);
+            cardHardware.Controls.Add(_panelPrinters);
 
             Controls.Add(cardHardware);
-            currentY += 184;
+            currentY += 202;
 
             // ==========================================
             // 4. Card 3: Operational Telemetry
@@ -279,7 +261,7 @@ namespace XeroxGo.PrinterAgent.UI
 
             var lblSysHeader = new Label
             {
-                Text = "Operational Telemetry",
+                Text = "Operational Settings",
                 Font = FluentTheme.Font(10.5f, FontStyle.Bold),
                 ForeColor = FluentTheme.TextPrimary,
                 Location = new Point(18, 14),
@@ -289,7 +271,7 @@ namespace XeroxGo.PrinterAgent.UI
 
             var lblPoll = new Label
             {
-                Text = "Queue Poll Interval",
+                Text = "Queue Check Interval",
                 Font = FluentTheme.Font(9f),
                 ForeColor = FluentTheme.TextSecondary,
                 Location = new Point(18, 40),
@@ -305,10 +287,10 @@ namespace XeroxGo.PrinterAgent.UI
             };
             _cmbPollInterval.Items.AddRange(new object[]
             {
-                "1 second (High speed / Kiosk testing)",
+                "1 second (Ultra-responsive / Kiosks)",
                 "2 seconds (Fast queue polling)",
-                "3 seconds (Recommended - Responsive)",
-                "5 seconds (Balanced - Power saving)",
+                "3 seconds (Recommended - Balanced)",
+                "5 seconds (Power saving)",
                 "10 seconds (Low bandwidth)",
                 "15 seconds (Minimal polling)"
             });
@@ -377,37 +359,8 @@ namespace XeroxGo.PrinterAgent.UI
             _txtApiUrl.Text = _config.ApiUrl;
             _txtApiKey.Text = _config.AgentApiKey;
 
-            // Logical Slot selection
-            string slot = string.IsNullOrWhiteSpace(_config.LogicalPrinterName) ? "Primary" : _config.LogicalPrinterName;
-            if (!_cmbLogicalSlot.Items.Contains(slot))
-            {
-                _cmbLogicalSlot.Items.Add(slot);
-            }
-            _cmbLogicalSlot.SelectedItem = slot;
-            if (_cmbLogicalSlot.SelectedIndex < 0 && _cmbLogicalSlot.Items.Count > 0)
-            {
-                _cmbLogicalSlot.SelectedIndex = 0;
-            }
-
-            // Populate installed physical printers
-            _cmbPhysicalPrinters.Items.Clear();
-            _cmbPhysicalPrinters.Items.Add("Auto (Detect Default)");
-
-            var installed = HardwareMonitor.GetInstalledPrinters();
-            foreach (var p in installed)
-            {
-                _cmbPhysicalPrinters.Items.Add(p);
-            }
-
-            if (string.IsNullOrWhiteSpace(_config.PhysicalPrinterName) || _config.PhysicalPrinterName.Equals("Auto", StringComparison.OrdinalIgnoreCase))
-            {
-                _cmbPhysicalPrinters.SelectedIndex = 0;
-            }
-            else
-            {
-                int idx = _cmbPhysicalPrinters.Items.IndexOf(_config.PhysicalPrinterName);
-                _cmbPhysicalPrinters.SelectedIndex = idx >= 0 ? idx : 0;
-            }
+            // Discover and populate physical printers
+            PopulateDiscoveredPrinters();
 
             // Map configured interval to dropdown
             int pollVal = _config.PollIntervalSeconds;
@@ -425,6 +378,73 @@ namespace XeroxGo.PrinterAgent.UI
             _chkAutoStart.Checked = StartupManager.IsAutoStartEnabled();
         }
 
+        private void PopulateDiscoveredPrinters()
+        {
+            _panelPrinters.Controls.Clear();
+            var discovered = HardwareMonitor.DiscoverAllPrinters();
+
+            if (discovered.Count == 0)
+            {
+                var lblEmpty = new Label
+                {
+                    Text = "No physical printers detected. Plug in a USB or network printer and click Refresh.",
+                    Font = FluentTheme.Font(9f),
+                    ForeColor = FluentTheme.TextSecondary,
+                    Dock = DockStyle.Fill,
+                    TextAlign = ContentAlignment.MiddleCenter
+                };
+                _panelPrinters.Controls.Add(lblEmpty);
+                return;
+            }
+
+            int itemY = 4;
+            int itemWidth = _panelPrinters.ClientSize.Width - 8;
+
+            foreach (var printer in discovered)
+            {
+                var rowPanel = new Panel
+                {
+                    Location = new Point(4, itemY),
+                    Size = new Size(itemWidth, 34),
+                    BackColor = Color.White
+                };
+
+                rowPanel.Paint += (s, e) =>
+                {
+                    var g = e.Graphics;
+                    g.SmoothingMode = SmoothingMode.AntiAlias;
+
+                    // Status dot
+                    Color dotColor = printer.IsOnline 
+                        ? (printer.IsPaperJammed || printer.IsOutOfPaper ? Color.FromArgb(239, 68, 68) : Color.FromArgb(16, 185, 129))
+                        : Color.FromArgb(156, 163, 175);
+
+                    using var dotBrush = new SolidBrush(dotColor);
+                    g.FillEllipse(dotBrush, 10, 12, 10, 10);
+
+                    // Printer Name
+                    using var nameFont = FluentTheme.Font(9.5f, FontStyle.Bold);
+                    using var nameBrush = new SolidBrush(FluentTheme.TextPrimary);
+                    g.DrawString(printer.Name, nameFont, nameBrush, 28, 8);
+
+                    // Badges (Color / Default / Status)
+                    string badgeText = printer.SupportsColor ? "Color" : "B&W";
+                    if (printer.IsDefault) badgeText += " • Default";
+                    if (printer.IsPaperJammed) badgeText += " • JAMMED";
+                    else if (printer.IsOutOfPaper) badgeText += " • OUT OF PAPER";
+                    else if (!printer.IsOnline) badgeText += " • Offline";
+
+                    using var badgeFont = FluentTheme.Font(8f);
+                    using var badgeBrush = new SolidBrush(FluentTheme.TextSecondary);
+                    var badgeSize = g.MeasureString(badgeText, badgeFont);
+                    g.DrawString(badgeText, badgeFont, badgeBrush, rowPanel.Width - badgeSize.Width - 10, 10);
+                };
+
+                _panelPrinters.Controls.Add(rowPanel);
+                itemY += 38;
+            }
+        }
+
         private void OnToggleKeyVisibility(object? sender, EventArgs e)
         {
             _isKeyRevealed = !_isKeyRevealed;
@@ -434,8 +454,7 @@ namespace XeroxGo.PrinterAgent.UI
 
         private void OnPrintTestSlip(object? sender, EventArgs e)
         {
-            string selected = _cmbPhysicalPrinters.SelectedItem?.ToString() ?? "Auto";
-            string resolved = HardwareMonitor.ResolveActivePrinter(selected);
+            string resolved = HardwareMonitor.ResolveDefaultPrinter();
 
             try
             {
@@ -470,10 +489,6 @@ namespace XeroxGo.PrinterAgent.UI
 
             _config.ApiUrl = url;
             _config.AgentApiKey = _txtApiKey.Text.Trim();
-            _config.LogicalPrinterName = _cmbLogicalSlot.SelectedItem?.ToString() ?? "Primary";
-
-            string physicalSelection = _cmbPhysicalPrinters.SelectedItem?.ToString() ?? "Auto";
-            _config.PhysicalPrinterName = physicalSelection.StartsWith("Auto", StringComparison.OrdinalIgnoreCase) ? "Auto" : physicalSelection;
 
             // Parse selected poll interval
             int pollSeconds = 3;

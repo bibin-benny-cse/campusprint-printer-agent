@@ -6,9 +6,25 @@ using System.Runtime.InteropServices;
 
 namespace XeroxGo.PrinterAgent.Services
 {
+    public class DiscoveredPrinter
+    {
+        public string Name { get; set; } = "";
+        public string DriverName { get; set; } = "";
+        public bool IsDefault { get; set; }
+        public bool IsOnline { get; set; } = true;
+        public bool SupportsColor { get; set; } = false;
+        public string Status { get; set; } = "Idle";
+        public bool IsPaperJammed { get; set; } = false;
+        public bool IsOutOfPaper { get; set; } = false;
+        public bool IsPaused { get; set; } = false;
+        public bool IsInError { get; set; } = false;
+        public string? ErrorMessage { get; set; }
+    }
+
     public class PrinterHealthState
     {
         public string PrinterName { get; set; } = "";
+        public string? DriverName { get; set; }
         public bool IsOnline { get; set; } = true;
         public bool IsPaperJammed { get; set; } = false;
         public bool IsOutOfPaper { get; set; } = false;
@@ -105,13 +121,71 @@ namespace XeroxGo.PrinterAgent.Services
             return list;
         }
 
-        public static string ResolveActivePrinter(string configuredName)
+        /// <summary>
+        /// Scans all physically connected printers, checks their Win32 spooler health,
+        /// color capabilities, and Windows default status. Filters out virtual drivers.
+        /// </summary>
+        public static List<DiscoveredPrinter> DiscoverAllPrinters()
         {
-            if (!string.IsNullOrWhiteSpace(configuredName) && !configuredName.Equals("Auto", StringComparison.OrdinalIgnoreCase))
+            var discovered = new List<DiscoveredPrinter>();
+            var allPrinters = GetInstalledPrinters();
+            var physicalPrinters = allPrinters.Where(p => !IsVirtualPrinter(p)).ToList();
+
+            string defaultPrinterName = "";
+            try
             {
-                return configuredName.Trim();
+                var settings = new PrinterSettings();
+                defaultPrinterName = settings.PrinterName ?? "";
+            }
+            catch { }
+
+            // If no physical printers found at all, fall back to whatever is installed
+            var targetList = physicalPrinters.Count > 0 ? physicalPrinters : allPrinters;
+
+            foreach (var printerName in targetList)
+            {
+                try
+                {
+                    var health = CheckPrinterHealth(printerName);
+                    bool isDefault = string.Equals(printerName, defaultPrinterName, StringComparison.OrdinalIgnoreCase);
+
+                    bool supportsColor = false;
+                    try
+                    {
+                        var s = new PrinterSettings { PrinterName = printerName };
+                        supportsColor = s.SupportsColor;
+                    }
+                    catch { }
+
+                    discovered.Add(new DiscoveredPrinter
+                    {
+                        Name = printerName,
+                        DriverName = health.DriverName ?? printerName,
+                        IsDefault = isDefault,
+                        IsOnline = health.IsOnline,
+                        SupportsColor = supportsColor,
+                        Status = health.StatusSummary,
+                        IsPaperJammed = health.IsPaperJammed,
+                        IsOutOfPaper = health.IsOutOfPaper,
+                        IsPaused = health.IsPaused,
+                        IsInError = health.IsInError,
+                        ErrorMessage = health.ErrorMessage
+                    });
+                }
+                catch (Exception ex)
+                {
+                    Logger.Warn($"Failed to discover printer '{printerName}': {ex.Message}");
+                }
             }
 
+            return discovered;
+        }
+
+        /// <summary>
+        /// Resolves the primary default physical printer for the system.
+        /// </summary>
+        public static string ResolveDefaultPrinter()
+        {
             var all = GetInstalledPrinters();
             var physical = all.Where(p => !IsVirtualPrinter(p)).ToList();
 
@@ -122,27 +196,34 @@ namespace XeroxGo.PrinterAgent.Services
                 string defaultPrinter = settings.PrinterName;
                 if (!string.IsNullOrWhiteSpace(defaultPrinter) && !IsVirtualPrinter(defaultPrinter))
                 {
-                    Logger.Info($"[PRINTER DETECT] Auto-selected default physical printer: {defaultPrinter}");
                     return defaultPrinter;
                 }
             }
             catch { }
 
-            // If default was virtual, pick first physical printer
+            // First physical printer
             if (physical.Count > 0)
             {
-                Logger.Info($"[PRINTER DETECT] Auto-selected first physical printer: {physical[0]}");
                 return physical[0];
             }
 
             // Fallback
             if (all.Count > 0)
             {
-                Logger.Warn($"[PRINTER DETECT] No physical printer found. Falling back to: {all[0]}");
                 return all[0];
             }
 
             return "Microsoft Print to PDF";
+        }
+
+        public static string ResolveActivePrinter(string? configuredName)
+        {
+            if (!string.IsNullOrWhiteSpace(configuredName) && !configuredName.Equals("Auto", StringComparison.OrdinalIgnoreCase))
+            {
+                return configuredName.Trim();
+            }
+
+            return ResolveDefaultPrinter();
         }
 
         /// <summary>
@@ -174,6 +255,8 @@ namespace XeroxGo.PrinterAgent.Services
                         if (GetPrinter(hPrinter, 2, pPrinterInfo, bytesNeeded, out _))
                         {
                             var info = Marshal.PtrToStructure<PRINTER_INFO_2>(pPrinterInfo);
+
+                            state.DriverName = info.pDriverName;
 
                             bool isOffline = (info.Status & PRINTER_STATUS_OFFLINE) != 0 ||
                                              (info.Status & PRINTER_STATUS_NOT_AVAILABLE) != 0 ||

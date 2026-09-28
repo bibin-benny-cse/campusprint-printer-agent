@@ -31,23 +31,71 @@ namespace XeroxGo.PrinterAgent.Services
             }
         }
 
+        /// <summary>
+        /// Sends complete inventory and live status of all auto-discovered physical printers to the cloud.
+        /// </summary>
+        public async Task<bool> SendMultiHeartbeatAsync(
+            List<DiscoveredPrinter> printers, 
+            long? currentJobId = null, 
+            string? activePrinterName = null)
+        {
+            try
+            {
+                var payload = new MultiPrinterHeartbeatPayload
+                {
+                    SystemName = Environment.MachineName
+                };
+
+                foreach (var p in printers)
+                {
+                    bool isThisActive = activePrinterName != null && 
+                                        string.Equals(activePrinterName, p.Name, StringComparison.OrdinalIgnoreCase);
+
+                    payload.Printers.Add(new PrinterTelemetryItem
+                    {
+                        Name = p.Name,
+                        DriverName = p.DriverName,
+                        IsDefault = p.IsDefault,
+                        IsOnline = p.IsOnline,
+                        SupportsColor = p.SupportsColor,
+                        Status = isThisActive ? "Printing" : p.Status,
+                        IsPaperJammed = p.IsPaperJammed,
+                        IsOutOfPaper = p.IsOutOfPaper,
+                        IsPaused = p.IsPaused,
+                        CurrentJobId = isThisActive ? currentJobId : null
+                    });
+                }
+
+                string json = JsonSerializer.Serialize(payload);
+                using var content = new StringContent(json, Encoding.UTF8, "application/json");
+                using var res = await _http.PostAsync("printers/heartbeat", content);
+
+                return res.IsSuccessStatusCode;
+            }
+            catch (Exception ex)
+            {
+                Logger.Warn($"[HEARTBEAT FAILED] Could not send multi-printer ping: {ex.Message}");
+                return false;
+            }
+        }
+
         public async Task<bool> SendHeartbeatAsync(
-            string logicalPrinterName, 
+            string printerName, 
             string status = "Idle", 
             long? currentJobId = null, 
             bool isOnline = true, 
-            string? physicalDriverName = null)
+            string? driverName = null)
         {
             try
             {
                 var payload = new HeartbeatPayload
                 {
-                    PrinterName = logicalPrinterName,
+                    PrinterName = printerName,
                     Status = status,
                     CurrentJobId = currentJobId,
                     IsOnline = isOnline,
-                    SystemName = physicalDriverName ?? Environment.MachineName,
-                    DriverName = physicalDriverName ?? logicalPrinterName
+                    SystemName = Environment.MachineName,
+                    DriverName = driverName ?? printerName
                 };
 
                 string json = JsonSerializer.Serialize(payload);
@@ -58,17 +106,19 @@ namespace XeroxGo.PrinterAgent.Services
             }
             catch (Exception ex)
             {
-                Logger.Warn($"[HEARTBEAT FAILED] Could not send ping for '{logicalPrinterName}': {ex.Message}");
+                Logger.Warn($"[HEARTBEAT FAILED] Could not send ping for '{printerName}': {ex.Message}");
                 return false;
             }
         }
 
-        public async Task<List<PrintJob>> GetPrintQueueAsync(string printerName)
+        public async Task<List<PrintJob>> GetPrintQueueAsync(string? printerName = null)
         {
             try
             {
                 string endpoint = "print-queue";
-                if (!string.IsNullOrWhiteSpace(printerName) && !printerName.Equals("Auto", StringComparison.OrdinalIgnoreCase))
+                if (!string.IsNullOrWhiteSpace(printerName) && 
+                    !printerName.Equals("Auto", StringComparison.OrdinalIgnoreCase) && 
+                    !printerName.Equals("All", StringComparison.OrdinalIgnoreCase))
                 {
                     endpoint += $"?printerName={Uri.EscapeDataString(printerName)}";
                 }
@@ -121,17 +171,17 @@ namespace XeroxGo.PrinterAgent.Services
         }
 
         /// <summary>
-        /// Atomically leases/claims a job to prevent race conditions in multi-printer or multi-agent environments.
-        /// Falls back to UpdateJobStatusAsync if the claim endpoint is unavailable.
+        /// Atomically leases/claims a job to prevent race conditions in multi-agent environments.
+        /// Uses the single unified printer name.
         /// </summary>
-        public async Task<bool> ClaimJobAsync(long jobId, string logicalPrinterName, string? physicalDriverName = null)
+        public async Task<bool> ClaimJobAsync(long jobId, string printerName)
         {
             try
             {
                 var payload = new Dictionary<string, string>
                 {
-                    ["printerName"] = logicalPrinterName,
-                    ["systemName"] = physicalDriverName ?? logicalPrinterName
+                    ["printerName"] = printerName,
+                    ["systemName"] = printerName
                 };
 
                 string json = JsonSerializer.Serialize(payload);
@@ -175,7 +225,6 @@ namespace XeroxGo.PrinterAgent.Services
                 string json = JsonSerializer.Serialize(payload);
                 using var content = new StringContent(json, Encoding.UTF8, "application/json");
                 
-                // Using PATCH method
                 var req = new HttpRequestMessage(new HttpMethod("PATCH"), $"jobs/{jobId}")
                 {
                     Content = content

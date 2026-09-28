@@ -1,5 +1,7 @@
 using System;
+using System.Collections.Generic;
 using System.IO;
+using System.Linq;
 using System.Net.Http;
 using System.Threading;
 using System.Threading.Tasks;
@@ -11,14 +13,14 @@ namespace XeroxGo.PrinterAgent.Services
     {
         private readonly AppConfig _config;
         private ApiClient _api;
-        private string _logicalPrinter;
-        private string _physicalPrinter;
         private CancellationTokenSource _cts = new();
         private bool _isPaused = false;
         private bool _isProcessing = false;
+        private string? _activePrinterName = null;
+        private long? _currentJobId = null;
         private int _consecutiveFailures = 0;
 
-        public event Action<string, string>? StatusChanged; // (Status, LogicalPrinterName)
+        public event Action<string, string>? StatusChanged; // (Status, SummaryOrPrinterName)
 
         public bool IsPaused
         {
@@ -26,34 +28,27 @@ namespace XeroxGo.PrinterAgent.Services
             set
             {
                 _isPaused = value;
-                StatusChanged?.Invoke(_isPaused ? "Paused" : "Idle", _logicalPrinter);
+                StatusChanged?.Invoke(_isPaused ? "Paused" : "Idle", _activePrinterName ?? "Ready");
             }
         }
 
-        public string LogicalPrinter => _logicalPrinter;
-        public string PhysicalPrinter => _physicalPrinter;
-        public string ActivePrinter => _logicalPrinter;
+        public string ActivePrinter => _activePrinterName ?? HardwareMonitor.ResolveDefaultPrinter();
 
         public QueueWorker(AppConfig config)
         {
             _config = config;
             _api = new ApiClient(_config.ApiUrl, _config.AgentApiKey);
-            _logicalPrinter = _config.LogicalPrinterName;
-            _physicalPrinter = HardwareMonitor.ResolveActivePrinter(_config.PhysicalPrinterName);
         }
 
         public void ReloadConfiguration(AppConfig newConfig)
         {
             _config.ApiUrl = newConfig.ApiUrl;
-            _config.LogicalPrinterName = newConfig.LogicalPrinterName;
-            _config.PhysicalPrinterName = newConfig.PhysicalPrinterName;
-            _config.PollIntervalSeconds = newConfig.PollIntervalSeconds;
             _config.AgentApiKey = newConfig.AgentApiKey;
+            _config.PollIntervalSeconds = newConfig.PollIntervalSeconds;
+            _config.HeartbeatIntervalSeconds = newConfig.HeartbeatIntervalSeconds;
 
             _api = new ApiClient(_config.ApiUrl, _config.AgentApiKey);
-            _logicalPrinter = _config.LogicalPrinterName;
-            _physicalPrinter = HardwareMonitor.ResolveActivePrinter(_config.PhysicalPrinterName);
-            Logger.Info($"[CONFIG RELOADED] Logical: '{_logicalPrinter}', Physical Driver: '{_physicalPrinter}', API: {_config.ApiUrl}");
+            Logger.Info($"[CONFIG RELOADED] API: {_config.ApiUrl}, Zero-Config Multi-Printer Auto-Discovery Active");
         }
 
         public void Start()
@@ -62,7 +57,7 @@ namespace XeroxGo.PrinterAgent.Services
             Task.Run(() => HeartbeatLoopAsync(_cts.Token));
             Task.Run(() => QueuePollLoopAsync(_cts.Token));
             Task.Run(() => ListenToSseStreamAsync(_cts.Token));
-            Logger.Info($"[WORKER STARTED] Monitoring queue for printer '{_logicalPrinter}'");
+            Logger.Info("[WORKER STARTED] Multi-printer auto-discovery daemon running.");
         }
 
         public void Stop()
@@ -77,16 +72,12 @@ namespace XeroxGo.PrinterAgent.Services
             {
                 try
                 {
-                    var health = HardwareMonitor.CheckPrinterHealth(_physicalPrinter);
+                    var printers = HardwareMonitor.DiscoverAllPrinters();
 
-                    string status = _isPaused ? "Paused" : (_isProcessing ? "Printing" : health.StatusSummary);
-
-                    bool ok = await _api.SendHeartbeatAsync(
-                        _logicalPrinter,
-                        status,
-                        null,
-                        health.IsOnline,
-                        _physicalPrinter
+                    bool ok = await _api.SendMultiHeartbeatAsync(
+                        printers,
+                        _currentJobId,
+                        _activePrinterName
                     );
 
                     if (ok)
@@ -95,6 +86,14 @@ namespace XeroxGo.PrinterAgent.Services
                         {
                             Logger.Info("[BACKEND RECONNECTED] Backend connection restored.");
                             _consecutiveFailures = 0;
+                        }
+
+                        if (!_isProcessing && !_isPaused)
+                        {
+                            string summary = printers.Count > 0 
+                                ? $"{printers.Count} Printer{(printers.Count == 1 ? "" : "s")} Ready" 
+                                : "No Printers Detected";
+                            StatusChanged?.Invoke("Idle", summary);
                         }
                     }
                     else
@@ -142,10 +141,10 @@ namespace XeroxGo.PrinterAgent.Services
 
             try
             {
-                var queue = await _api.GetPrintQueueAsync(_logicalPrinter);
+                // Fetch print queue for this store
+                var queue = await _api.GetPrintQueueAsync(null);
                 if (queue.Count == 0)
                 {
-                    StatusChanged?.Invoke("Idle", _logicalPrinter);
                     return;
                 }
 
@@ -161,19 +160,57 @@ namespace XeroxGo.PrinterAgent.Services
 
         private async Task ExecuteJobAsync(PrintJob job)
         {
-            // 1. Atomically claim/lease the job to prevent multi-agent race conditions
-            bool claimed = await _api.ClaimJobAsync(job.Id, _logicalPrinter, _physicalPrinter);
+            var discoveredPrinters = HardwareMonitor.DiscoverAllPrinters();
+
+            // Resolve target physical printer
+            string targetPrinter = "";
+            if (!string.IsNullOrWhiteSpace(job.TargetPrinterName))
+            {
+                var matched = discoveredPrinters.FirstOrDefault(p => 
+                    string.Equals(p.Name, job.TargetPrinterName, StringComparison.OrdinalIgnoreCase));
+                if (matched != null)
+                {
+                    targetPrinter = matched.Name;
+                }
+            }
+
+            // Fallback: Smart routing based on color mode if no specific printer matched
+            if (string.IsNullOrWhiteSpace(targetPrinter))
+            {
+                bool isColor = string.Equals(job.Mode, "Color", StringComparison.OrdinalIgnoreCase);
+                if (isColor)
+                {
+                    var colorPrinter = discoveredPrinters.FirstOrDefault(p => p.SupportsColor && p.IsOnline);
+                    if (colorPrinter != null) targetPrinter = colorPrinter.Name;
+                }
+                else
+                {
+                    var bwPrinter = discoveredPrinters.FirstOrDefault(p => !p.SupportsColor && p.IsOnline);
+                    if (bwPrinter != null) targetPrinter = bwPrinter.Name;
+                }
+            }
+
+            // Ultimate fallback to default physical printer
+            if (string.IsNullOrWhiteSpace(targetPrinter))
+            {
+                targetPrinter = HardwareMonitor.ResolveDefaultPrinter();
+            }
+
+            // 1. Atomically claim/lease the job with the unified printer name
+            bool claimed = await _api.ClaimJobAsync(job.Id, targetPrinter);
             if (!claimed)
             {
-                Logger.Info($"[JOB SKIPPED] Job ID={job.Id} was already claimed by another printer or cancelled.");
+                Logger.Info($"[JOB SKIPPED] Job ID={job.Id} was already claimed or cancelled.");
                 return;
             }
 
             _isProcessing = true;
-            StatusChanged?.Invoke("Printing", _logicalPrinter);
-            Logger.Info($"[JOB CLAIMED] Processing Job ID={job.Id} (Token: {job.Token}, File: {job.Filename}, Copies: {job.Copies})");
+            _activePrinterName = targetPrinter;
+            _currentJobId = job.Id;
+            StatusChanged?.Invoke("Printing", targetPrinter);
+            Logger.Info($"[JOB CLAIMED] Processing Job ID={job.Id} on printer '{targetPrinter}' (Token: {job.Token}, File: {job.Filename}, Copies: {job.Copies})");
 
-            await _api.SendHeartbeatAsync(_logicalPrinter, "Printing", job.Id, true, _physicalPrinter);
+            _ = _api.SendMultiHeartbeatAsync(discoveredPrinters, _currentJobId, _activePrinterName);
 
             string? downloadedPath = null;
             ProcessedPdfResult? processedResult = null;
@@ -188,27 +225,32 @@ namespace XeroxGo.PrinterAgent.Services
                 processedResult = PdfProcessor.ProcessPdfForPrinting(downloadedPath, job, _config.TempDirectory);
 
                 // 4. Send to physical spooler
-                await PrintEngine.PrintDocumentAsync(processedResult.FilePath, job, _physicalPrinter);
-                Logger.Info($"[PRINT COMPLETE] Job {job.Id} successfully spooled to {_physicalPrinter}");
+                await PrintEngine.PrintDocumentAsync(processedResult.FilePath, job, targetPrinter);
+                Logger.Info($"[PRINT COMPLETE] Job {job.Id} successfully spooled to {targetPrinter}");
 
                 // 5. Mark status as Completed
                 await _api.UpdateJobStatusAsync(job.Id, "Completed");
-                await _api.SendHeartbeatAsync(_logicalPrinter, "Idle", null, true, _physicalPrinter);
-                StatusChanged?.Invoke("Idle", _logicalPrinter);
+                _currentJobId = null;
+                _activePrinterName = null;
+                _ = _api.SendMultiHeartbeatAsync(discoveredPrinters);
+
+                StatusChanged?.Invoke("Idle", $"{discoveredPrinters.Count} Printers Ready");
             }
             catch (Exception ex)
             {
-                Logger.Error($"[JOB FAILED] Error processing job {job.Id}", ex);
+                Logger.Error($"[JOB FAILED] Error processing job {job.Id} on {targetPrinter}", ex);
 
-                // Alert strictly on errors
                 NotificationService.ShowError(
                     "Print Job Failed",
-                    $"Document '{job.OriginalName ?? job.Filename}' failed to print on {_physicalPrinter}. {ex.Message}"
+                    $"Document '{job.OriginalName ?? job.Filename}' failed to print on {targetPrinter}. {ex.Message}"
                 );
 
                 await _api.UpdateJobStatusAsync(job.Id, "Failed", ex.Message);
-                await _api.SendHeartbeatAsync(_logicalPrinter, "Error", null, true, _physicalPrinter);
-                StatusChanged?.Invoke("Error", _logicalPrinter);
+                _currentJobId = null;
+                _activePrinterName = null;
+                _ = _api.SendMultiHeartbeatAsync(discoveredPrinters);
+
+                StatusChanged?.Invoke("Error", "Print Error");
             }
             finally
             {
@@ -219,6 +261,8 @@ namespace XeroxGo.PrinterAgent.Services
                     CleanupFile(processedResult.FilePath);
                 }
                 _isProcessing = false;
+                _activePrinterName = null;
+                _currentJobId = null;
                 MemoryOptimizer.TrimMemory();
             }
         }
@@ -241,14 +285,13 @@ namespace XeroxGo.PrinterAgent.Services
                     using var reader = new StreamReader(stream);
 
                     _isSseConnected = true;
-                    Logger.Info("[SSE CONNECTED] Listening for instant real-time print triggers (poll timer relaxed to 25s).");
+                    Logger.Info("[SSE CONNECTED] Listening for instant real-time print triggers.");
 
                     while (!reader.EndOfStream && !ct.IsCancellationRequested)
                     {
                         string? line = await reader.ReadLineAsync().ConfigureAwait(false);
                         if (!string.IsNullOrWhiteSpace(line) && line.StartsWith("data:"))
                         {
-                            // Instant trigger received from backend!
                             if (!_isProcessing && !_isPaused)
                             {
                                 _ = CheckAndProcessQueueAsync();
@@ -260,7 +303,7 @@ namespace XeroxGo.PrinterAgent.Services
                 {
                     _isSseConnected = false;
                     Logger.Warn($"SSE live stream disconnected: {ex.Message}. Falling back to active {_config.PollIntervalSeconds}s polling.");
-                    await Task.Delay(10000, ct).ConfigureAwait(false); // Wait 10s before reconnecting SSE
+                    await Task.Delay(10000, ct).ConfigureAwait(false);
                 }
             }
         }

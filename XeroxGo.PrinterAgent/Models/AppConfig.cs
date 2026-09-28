@@ -7,23 +7,22 @@ namespace XeroxGo.PrinterAgent.Models
 {
     public class AppConfig
     {
-        public string ApiUrl { get; set; } = "http://localhost:3001/api";
-        public string LogicalPrinterName { get; set; } = "Printer 1";
-        public string PhysicalPrinterName { get; set; } = "Auto";
+        public string ApiUrl { get; set; } = "https://campusprint-backend-bl6p.onrender.com/api";
         public string AgentApiKey { get; set; } = "";
-        
-        // Backward compatibility alias for PrinterName
-        [JsonIgnore]
-        public string PrinterName
-        {
-            get => LogicalPrinterName;
-            set => LogicalPrinterName = value;
-        }
-
         public int PollIntervalSeconds { get; set; } = 3;
         public int HeartbeatIntervalSeconds { get; set; } = 5;
         public bool AutoStartWithWindows { get; set; } = true;
         public string TempDirectory { get; set; } = "";
+
+        // Backward compatibility properties for deserializing legacy config files
+        [JsonPropertyName("LogicalPrinterName")]
+        public string? LegacyLogicalPrinterName { get; set; }
+
+        [JsonPropertyName("PhysicalPrinterName")]
+        public string? LegacyPhysicalPrinterName { get; set; }
+
+        [JsonPropertyName("PrinterName")]
+        public string? LegacyPrinterName { get; set; }
 
         private static readonly string ConfigDir = Path.Combine(
             Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
@@ -81,13 +80,7 @@ namespace XeroxGo.PrinterAgent.Models
         public void EnsureDefaults()
         {
             if (string.IsNullOrWhiteSpace(ApiUrl))
-                ApiUrl = "http://localhost:3001/api";
-
-            if (string.IsNullOrWhiteSpace(LogicalPrinterName))
-                LogicalPrinterName = "Printer 1";
-
-            if (string.IsNullOrWhiteSpace(PhysicalPrinterName))
-                PhysicalPrinterName = "Auto";
+                ApiUrl = "https://campusprint-backend-bl6p.onrender.com/api";
 
             if (PollIntervalSeconds < 1)
                 PollIntervalSeconds = 3;
