@@ -145,7 +145,7 @@ namespace XeroxGo.PrinterAgent.UI
             currentY += 52;
 
             // ==========================================
-            // 2. Card 1: Cloud Connection & Pairing
+            // 2. Card 1: Connection Settings
             // ==========================================
             var cardCloud = new FluentCard
             {
@@ -155,7 +155,7 @@ namespace XeroxGo.PrinterAgent.UI
 
             var lblCloudHeader = new Label
             {
-                Text = "Cloud Connection & Store Pairing",
+                Text = "Connection Settings",
                 Font = FluentTheme.Font(10.5f, FontStyle.Bold),
                 ForeColor = FluentTheme.TextPrimary,
                 Location = new Point(18, 14),
@@ -165,7 +165,7 @@ namespace XeroxGo.PrinterAgent.UI
 
             var lblApiUrl = new Label
             {
-                Text = "API Base URL",
+                Text = "Cloud Server URL",
                 Font = FluentTheme.Font(9f),
                 ForeColor = FluentTheme.TextSecondary,
                 Location = new Point(18, 40),
@@ -182,7 +182,7 @@ namespace XeroxGo.PrinterAgent.UI
 
             var lblApiKey = new Label
             {
-                Text = "Store Agent API Key / Token",
+                Text = "Store Key",
                 Font = FluentTheme.Font(9f),
                 ForeColor = FluentTheme.TextSecondary,
                 Location = new Point(18, 102),
@@ -493,7 +493,7 @@ namespace XeroxGo.PrinterAgent.UI
             string url = _txtApiUrl.Text?.Trim() ?? "";
             if (string.IsNullOrWhiteSpace(url) || !Uri.TryCreate(url, UriKind.Absolute, out _))
             {
-                MessageBox.Show("Please enter a valid absolute HTTP/HTTPS API URL.", "Validation Error", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                MessageBox.Show("Please enter a valid HTTP/HTTPS Server URL.", "Validation Error", MessageBoxButtons.OK, MessageBoxIcon.Warning);
                 _txtApiUrl.Focus();
                 return;
             }
