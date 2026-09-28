@@ -18,6 +18,7 @@ namespace XeroxGo.PrinterAgent.UI
         private readonly AppConfig _config;
         private readonly QueueWorker _worker;
         private SettingsWindow? _settingsWindow;
+        private LogViewerWindow? _logViewerWindow;
 
         private string _currentStatusText = "Connecting...";
         private string _currentStatusState = "idle";
@@ -166,23 +167,25 @@ namespace XeroxGo.PrinterAgent.UI
 
         private void OnViewLogs(object? sender, EventArgs e)
         {
-            string path = Logger.GetLogFilePath();
-            if (File.Exists(path))
+            if (_logViewerWindow == null || _logViewerWindow.IsDisposed)
             {
-                Process.Start(new ProcessStartInfo
-                {
-                    FileName = path,
-                    UseShellExecute = true
-                });
+                _logViewerWindow = new LogViewerWindow();
             }
-            else
+
+            if (_logViewerWindow.WindowState == FormWindowState.Minimized)
             {
-                MessageBox.Show("No log file found yet.", "XeroxGo Logs", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                _logViewerWindow.WindowState = FormWindowState.Normal;
             }
+
+            _logViewerWindow.Show();
+            _logViewerWindow.BringToFront();
+            _logViewerWindow.Activate();
         }
 
         private void OnExit(object? sender, EventArgs e)
         {
+            _logViewerWindow?.Dispose();
+            _settingsWindow?.Dispose();
             _trayIcon.Visible = false;
             _worker.Dispose();
             Application.Exit();
