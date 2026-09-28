@@ -105,7 +105,7 @@ namespace XeroxGo.PrinterAgent.UI
                 g.TextRenderingHint = TextRenderingHint.ClearTypeGridFit;
 
                 TextRenderer.DrawText(g, "XeroxGo Agent", _headerTitleFont, new Point(74, -4), FluentTheme.TextPrimary, TextFormatFlags.NoPadding | TextFormatFlags.SingleLine);
-                TextRenderer.DrawText(g, "By Unnamed Enterprises", _headerSubFont, new Point(74, 20), FluentTheme.TextSecondary, TextFormatFlags.NoPadding | TextFormatFlags.SingleLine);
+                TextRenderer.DrawText(g, $"v{UpdateService.GetCurrentVersionString()} • By Unnamed Enterprises", _headerSubFont, new Point(74, 20), FluentTheme.TextSecondary, TextFormatFlags.NoPadding | TextFormatFlags.SingleLine);
             };
 
             // Official XeroxGo Logo (Transparent Emblem - 63x32 preserving uncompressed 1.96:1 aspect ratio)

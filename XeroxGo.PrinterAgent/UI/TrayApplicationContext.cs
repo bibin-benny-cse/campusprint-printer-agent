@@ -48,6 +48,7 @@ namespace XeroxGo.PrinterAgent.UI
 
             _contextMenu.Items.Add(new ToolStripMenuItem("⚙️  Agent Settings...", null, OnOpenSettings));
             _contextMenu.Items.Add(new ToolStripMenuItem("📄  View Activity Logs", null, OnViewLogs));
+            _contextMenu.Items.Add(new ToolStripMenuItem("🔄  Check for Updates...", null, OnCheckForUpdates));
             _contextMenu.Items.Add(new ToolStripSeparator());
             _contextMenu.Items.Add(new ToolStripMenuItem("❌  Exit Agent", null, OnExit));
 
@@ -75,6 +76,9 @@ namespace XeroxGo.PrinterAgent.UI
             {
                 StartupManager.SetAutoStart(_config.AutoStartWithWindows);
             }
+
+            // Start silent periodic update check (initial 30s delay, every 8h)
+            UpdateService.StartPeriodicChecker(OnBackgroundUpdateFound);
 
             // Immediately flush startup/JIT memory pages to maintain minimal RAM footprint (~15-25 MB)
             MemoryOptimizer.TrimMemory();
@@ -178,6 +182,70 @@ namespace XeroxGo.PrinterAgent.UI
             else
             {
                 MessageBox.Show("No log file found yet.", "XeroxGo Logs", MessageBoxButtons.OK, MessageBoxIcon.Information);
+            }
+        }
+
+        private async void OnCheckForUpdates(object? sender, EventArgs e)
+        {
+            try
+            {
+                var info = await UpdateService.CheckForUpdatesAsync();
+                PromptAndUpdate(info, manual: true);
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show($"Could not check for updates: {ex.Message}", "XeroxGo Update", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+            }
+        }
+
+        private void OnBackgroundUpdateFound(UpdateInfo info)
+        {
+            if (_trayIcon.ContextMenuStrip?.InvokeRequired == true)
+            {
+                _trayIcon.ContextMenuStrip.BeginInvoke(new Action(() => OnBackgroundUpdateFound(info)));
+                return;
+            }
+
+            NotificationService.ShowInfo(
+                "Update Available",
+                $"XeroxGo Agent v{info.VersionString} is available. Click 'Check for Updates' in the tray menu to install."
+            );
+        }
+
+        private void PromptAndUpdate(UpdateInfo info, bool manual)
+        {
+            if (!info.IsUpdateAvailable)
+            {
+                if (manual)
+                {
+                    MessageBox.Show(
+                        $"XeroxGo Agent is up to date (Version {UpdateService.GetCurrentVersionString()}).",
+                        "Up to Date",
+                        MessageBoxButtons.OK,
+                        MessageBoxIcon.Information
+                    );
+                }
+                return;
+            }
+
+            string releaseNotes = string.IsNullOrWhiteSpace(info.ReleaseNotes) 
+                ? "" 
+                : $"\n\nRelease Notes:\n{info.ReleaseNotes.Trim()}";
+
+            var result = MessageBox.Show(
+                $"A new version of XeroxGo Agent is available!\n\n" +
+                $"Current Version:  {UpdateService.GetCurrentVersionString()}\n" +
+                $"Latest Version:   {info.VersionString}{releaseNotes}\n\n" +
+                $"Would you like to download and install this update now?",
+                "XeroxGo Agent Update",
+                MessageBoxButtons.YesNo,
+                MessageBoxIcon.Question
+            );
+
+            if (result == DialogResult.Yes)
+            {
+                var progressDialog = new UpdateProgressDialog(info);
+                progressDialog.Show();
             }
         }
 

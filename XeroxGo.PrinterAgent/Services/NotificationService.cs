@@ -64,5 +64,26 @@ namespace XeroxGo.PrinterAgent.Services
         {
             ShowError(title, message, force: true);
         }
+
+        /// <summary>
+        /// Displays an informational notification (e.g., update available).
+        /// </summary>
+        public static void ShowInfo(string title, string message)
+        {
+            if (_notifyIcon == null) return;
+            try
+            {
+                _notifyIcon.ShowBalloonTip(
+                    6000,
+                    $"XeroxGo: {title}",
+                    message,
+                    ToolTipIcon.Info
+                );
+            }
+            catch (Exception ex)
+            {
+                Logger.Error("Failed to display notification balloon", ex);
+            }
+        }
     }
 }
