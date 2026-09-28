@@ -30,18 +30,6 @@ jobs:
         run: |
           dotnet publish XeroxGo.PrinterAgent/XeroxGo.PrinterAgent.csproj -c Release -r win-x64 --self-contained -p:PublishSingleFile=true
 
-      - name: Sign Standalone EXE with Persistent Certificate
-        shell: pwsh
-        run: |
-          # 1. Locate Microsoft SignTool (x64) from Windows SDK
-          $signtool = (Get-ChildItem -Path "C:\Program Files (x86)\Windows Kits\10\bin" -Filter "signtool.exe" -Recurse | Where-Object { $_.FullName -match "\\x64\\signtool\.exe$" } | Select-Object -First 1).FullName
-          Write-Host "Located SignTool at: $signtool"
-          
-          # 2. Sign standalone executable with RFC 3161 timestamp
-          $exePath = "XeroxGo.PrinterAgent/bin/Release/net8.0-windows/win-x64/publish/XeroxGo.PrinterAgent.exe"
-          & $signtool sign /f "certs\XeroxGoCert.pfx" /p "XeroxGo2026!" /fd SHA256 /tr http://timestamp.digicert.com /td SHA256 $exePath
-          Write-Host "Successfully signed $exePath"
-
       - name: Upload Standalone .EXE Artifact
         uses: actions/upload-artifact@v4
         with:
@@ -52,14 +40,6 @@ jobs:
         run: |
           choco install innosetup --no-progress
           & "C:\Program Files (x86)\Inno Setup 6\ISCC.exe" XeroxGo.PrinterAgent/Installer/setup.iss
-
-      - name: Sign Inno Setup Installer
-        shell: pwsh
-        run: |
-          $signtool = (Get-ChildItem -Path "C:\Program Files (x86)\Windows Kits\10\bin" -Filter "signtool.exe" -Recurse | Where-Object { $_.FullName -match "\\x64\\signtool\.exe$" } | Select-Object -First 1).FullName
-          $setupPath = "XeroxGo.PrinterAgent/Installer/Output/XeroxGoAgent-Setup.exe"
-          & $signtool sign /f "certs\XeroxGoCert.pfx" /p "XeroxGo2026!" /fd SHA256 /tr http://timestamp.digicert.com /td SHA256 $setupPath
-          Write-Host "Successfully signed $setupPath"
 
       - name: Upload Setup Installer Artifact
         uses: actions/upload-artifact@v4
