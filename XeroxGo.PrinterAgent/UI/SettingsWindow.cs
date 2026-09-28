@@ -326,25 +326,11 @@ namespace XeroxGo.PrinterAgent.UI
                 Text = "Print Test Slip",
                 HasPrinterIcon = true,
                 Location = new Point(0, 0),
-                Size = new Size(136, 34),
+                Size = new Size(148, 34),
                 IsPrimary = false
             };
             _btnTestSlip.Click += OnPrintTestSlip;
             footerPanel.Controls.Add(_btnTestSlip);
-
-            var btnViewLogs = new FluentButton
-            {
-                Text = "Activity Logs",
-                Location = new Point(144, 0),
-                Size = new Size(116, 34),
-                IsPrimary = false
-            };
-            btnViewLogs.Click += (s, e) =>
-            {
-                var viewer = new LogViewerWindow();
-                viewer.Show(this);
-            };
-            footerPanel.Controls.Add(btnViewLogs);
 
             _btnCancel = new FluentButton
             {
