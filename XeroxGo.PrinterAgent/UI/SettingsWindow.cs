@@ -367,7 +367,7 @@ namespace XeroxGo.PrinterAgent.UI
             int selectedIdx = 2; // Default to 3 seconds
             for (int i = 0; i < _cmbPollInterval.Items.Count; i++)
             {
-                if (_cmbPollInterval.Items[i].ToString()!.StartsWith($"{pollVal} second"))
+                if (_cmbPollInterval.Items[i]?.ToString()?.StartsWith($"{pollVal} second") == true)
                 {
                     selectedIdx = i;
                     break;
