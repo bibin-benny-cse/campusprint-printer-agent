@@ -96,8 +96,7 @@ namespace XeroxGo.PrinterAgent.Services
                     DriverName = driverName ?? printerName
                 };
 
-                string json = JsonSerializer.Serialize(payload);
-                using var content = new StringContent(json, Encoding.UTF8, "application/json");
+                using var content = JsonContent.Create(payload);
                 using var res = await _http.PostAsync("printers/heartbeat", content);
 
                 return res.IsSuccessStatusCode;
@@ -124,8 +123,8 @@ namespace XeroxGo.PrinterAgent.Services
                 using var res = await _http.GetAsync(endpoint);
                 res.EnsureSuccessStatusCode();
 
-                string json = await res.Content.ReadAsStringAsync();
-                var jobs = JsonSerializer.Deserialize<List<PrintJob>>(json);
+                using var stream = await res.Content.ReadAsStreamAsync();
+                var jobs = await JsonSerializer.DeserializeAsync<List<PrintJob>>(stream);
                 return jobs ?? new List<PrintJob>();
             }
             catch (Exception ex)
@@ -182,8 +181,7 @@ namespace XeroxGo.PrinterAgent.Services
                     ["systemName"] = printerName
                 };
 
-                string json = JsonSerializer.Serialize(payload);
-                using var content = new StringContent(json, Encoding.UTF8, "application/json");
+                using var content = JsonContent.Create(payload);
                 using var res = await _http.PostAsync($"jobs/{jobId}/claim", content);
 
                 if (res.IsSuccessStatusCode)
@@ -220,15 +218,8 @@ namespace XeroxGo.PrinterAgent.Services
                     payload["error"] = errorMessage;
                 }
 
-                string json = JsonSerializer.Serialize(payload);
-                using var content = new StringContent(json, Encoding.UTF8, "application/json");
-                
-                var req = new HttpRequestMessage(new HttpMethod("PATCH"), $"jobs/{jobId}")
-                {
-                    Content = content
-                };
-
-                using var res = await _http.SendAsync(req);
+                using var content = JsonContent.Create(payload);
+                using var res = await _http.PatchAsync($"jobs/{jobId}", content);
                 return res.IsSuccessStatusCode;
             }
             catch (Exception ex)

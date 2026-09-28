@@ -29,7 +29,8 @@ namespace XeroxGo.PrinterAgent.Services
                 // 2. Request Windows Memory Manager to flush unreferenced working-set pages
                 if (Environment.OSVersion.Platform == PlatformID.Win32NT)
                 {
-                    SetProcessWorkingSetSize(Process.GetCurrentProcess().Handle, -1, -1);
+                    // Use Win32 current-process pseudo-handle ((IntPtr)(-1)) to avoid Process object allocation
+                    SetProcessWorkingSetSize((IntPtr)(-1), -1, -1);
                 }
             }
             catch

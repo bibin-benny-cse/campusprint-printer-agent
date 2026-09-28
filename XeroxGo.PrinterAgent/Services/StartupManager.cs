@@ -32,9 +32,7 @@ namespace XeroxGo.PrinterAgent.Services
 
                 if (enable)
                 {
-                    string exePath = Process.GetCurrentProcess().MainModule?.FileName 
-                                     ?? Environment.ProcessPath 
-                                     ?? "";
+                    string exePath = Environment.ProcessPath ?? "";
 
                     if (!string.IsNullOrEmpty(exePath))
                     {

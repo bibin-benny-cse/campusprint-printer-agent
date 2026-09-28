@@ -62,7 +62,11 @@ namespace XeroxGo.PrinterAgent.Services
                     using var proc = Process.Start(psi);
                     if (proc != null)
                     {
-                        proc.WaitForExit(30000); // 30s timeout for spooler handoff
+                        if (!proc.WaitForExit(30000)) // 30s timeout for spooler handoff
+                        {
+                            try { proc.Kill(entireProcessTree: true); } catch { }
+                            Logger.Warn($"[PRINT TIMEOUT] Native print handoff timed out after 30s for '{pdfPath}'. Terminated hanging reader process.");
+                        }
                     }
                 }
                 catch (Exception ex)

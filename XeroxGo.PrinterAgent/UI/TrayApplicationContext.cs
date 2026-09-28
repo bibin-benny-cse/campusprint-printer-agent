@@ -3,6 +3,7 @@ using System.Diagnostics;
 using System.Drawing;
 using System.Drawing.Drawing2D;
 using System.IO;
+using System.Runtime.InteropServices;
 using System.Windows.Forms;
 using XeroxGo.PrinterAgent.Models;
 using XeroxGo.PrinterAgent.Services;
@@ -265,6 +266,9 @@ namespace XeroxGo.PrinterAgent.UI
             Application.Exit();
         }
 
+        [DllImport("user32.dll", SetLastError = true)]
+        private static extern bool DestroyIcon(IntPtr hIcon);
+
         private static Icon CreateStatusIcon(Color statusColor)
         {
             using var bmp = new Bitmap(32, 32);
@@ -295,7 +299,17 @@ namespace XeroxGo.PrinterAgent.UI
             }
 
             IntPtr hIcon = bmp.GetHicon();
-            return Icon.FromHandle(hIcon);
+            try
+            {
+                // Create a managed Icon copy that disposes safely without leaking the native User Object
+                using var tempIcon = Icon.FromHandle(hIcon);
+                return (Icon)tempIcon.Clone();
+            }
+            finally
+            {
+                // Explicitly free the unmanaged Win32 HICON handle allocated by bmp.GetHicon()
+                DestroyIcon(hIcon);
+            }
         }
 
         protected override void Dispose(bool disposing)

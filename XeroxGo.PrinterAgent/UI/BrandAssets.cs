@@ -111,7 +111,8 @@ namespace XeroxGo.PrinterAgent.UI
                     using var stream = assembly.GetManifestResourceStream(resName);
                     if (stream != null)
                     {
-                        return Image.FromStream(stream);
+                        using var temp = Image.FromStream(stream);
+                        return new Bitmap(temp);
                     }
                 }
             }

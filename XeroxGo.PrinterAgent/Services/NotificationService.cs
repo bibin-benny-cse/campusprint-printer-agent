@@ -27,7 +27,7 @@ namespace XeroxGo.PrinterAgent.Services
         {
             if (_notifyIcon == null) return;
 
-            string key = $"{title}:{message}";
+            string key = title.Trim().ToLowerInvariant();
             DateTime now = DateTime.UtcNow;
 
             if (!force && _lastNotificationTime.TryGetValue(key, out var lastTime))
@@ -40,6 +40,19 @@ namespace XeroxGo.PrinterAgent.Services
             }
 
             _lastNotificationTime[key] = now;
+
+            // Opportunistically prune stale keys to prevent unbounded dictionary growth
+            if (_lastNotificationTime.Count > 20)
+            {
+                foreach (var kvp in _lastNotificationTime)
+                {
+                    if (now - kvp.Value > TimeSpan.FromMinutes(10))
+                    {
+                        _lastNotificationTime.TryRemove(kvp.Key, out _);
+                    }
+                }
+            }
+
             Logger.Warn($"[ALERT TRIGGERED] {title}: {message}");
 
             try

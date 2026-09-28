@@ -22,6 +22,7 @@ namespace XeroxGo.PrinterAgent.UI
         private readonly Action? _onRefreshPrintersCallback;
         private readonly Font _headerTitleFont = FluentTheme.Font(12.5f, FontStyle.Bold);
         private readonly Font _headerSubFont = FluentTheme.Font(8.5f, FontStyle.Regular);
+        private readonly Font _printerRowFont = FluentTheme.Font(9.25f, FontStyle.Regular);
 
         private FluentTextBox _txtApiUrl = null!;
         private FluentTextBox _txtApiKey = null!;
@@ -67,6 +68,7 @@ namespace XeroxGo.PrinterAgent.UI
             {
                 _headerTitleFont.Dispose();
                 _headerSubFont.Dispose();
+                _printerRowFont.Dispose();
             }
             base.Dispose(disposing);
         }
@@ -394,7 +396,14 @@ namespace XeroxGo.PrinterAgent.UI
 
         private void PopulateDiscoveredPrinters()
         {
-            _panelPrinters.Controls.Clear();
+            // Explicitly dispose old controls and HWND handles to prevent handle leaks
+            while (_panelPrinters.Controls.Count > 0)
+            {
+                var ctrl = _panelPrinters.Controls[0];
+                _panelPrinters.Controls.RemoveAt(0);
+                ctrl.Dispose();
+            }
+
             var discovered = HardwareMonitor.DiscoverAllPrinters();
 
             if (discovered.Count == 0)
@@ -450,7 +459,6 @@ namespace XeroxGo.PrinterAgent.UI
 
                     // 3. Printer Name (Clean Segoe UI regular, vertically centered with ellipsis if long)
                     int maxNameWidth = w - 40;
-                    using var nameFont = FluentTheme.Font(9.25f, FontStyle.Regular);
                     using var nameBrush = new SolidBrush(FluentTheme.TextPrimary);
                     using var format = new StringFormat
                     {
@@ -459,7 +467,7 @@ namespace XeroxGo.PrinterAgent.UI
                         FormatFlags = StringFormatFlags.NoWrap
                     };
 
-                    g.DrawString(printer.Name, nameFont, nameBrush, new RectangleF(28, 0, maxNameWidth, h), format);
+                    g.DrawString(printer.Name, _printerRowFont, nameBrush, new RectangleF(28, 0, maxNameWidth, h), format);
                 };
 
                 _panelPrinters.Controls.Add(rowPanel);

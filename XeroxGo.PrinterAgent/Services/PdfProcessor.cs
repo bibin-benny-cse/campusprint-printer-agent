@@ -130,6 +130,7 @@ namespace XeroxGo.PrinterAgent.Services
                     }
 
                     bool sideBySide = layout == "sideBySide";
+                    using var form = XPdfForm.FromFile(inputPath);
 
                     for (int i = 0; i < pageIndices.Count; i += 2)
                     {
@@ -141,12 +142,12 @@ namespace XeroxGo.PrinterAgent.Services
                         using var gfx = XGraphics.FromPdfPage(sheet);
 
                         // Render first page on half sheet
-                        RenderPageHalf(gfx, inputPath, pageIndices[i], 0, sideBySide, sheet.Width.Point, sheet.Height.Point, rotationsMap);
+                        RenderPageHalf(gfx, form, pageIndices[i], 0, sideBySide, sheet.Width.Point, sheet.Height.Point, rotationsMap);
 
                         // Render second page on other half if present
                         if (i + 1 < pageIndices.Count)
                         {
-                            RenderPageHalf(gfx, inputPath, pageIndices[i + 1], 1, sideBySide, sheet.Width.Point, sheet.Height.Point, rotationsMap);
+                            RenderPageHalf(gfx, form, pageIndices[i + 1], 1, sideBySide, sheet.Width.Point, sheet.Height.Point, rotationsMap);
                         }
                     }
                 }
@@ -158,13 +159,14 @@ namespace XeroxGo.PrinterAgent.Services
             catch (Exception ex)
             {
                 Logger.Error($"PDF processing failed for job {job.Id}. Falling back to original document.", ex);
+                try { if (File.Exists(outputPath)) File.Delete(outputPath); } catch { }
                 return new ProcessedPdfResult { FilePath = inputPath, IsTemporary = false };
             }
         }
 
         private static void RenderPageHalf(
             XGraphics gfx,
-            string inputPath,
+            XPdfForm form,
             int pageIndex,
             int slot,
             bool sideBySide,
@@ -172,7 +174,6 @@ namespace XeroxGo.PrinterAgent.Services
             double sheetHeight,
             Dictionary<string, int> rotationsMap)
         {
-            using var form = XPdfForm.FromFile(inputPath);
             form.PageNumber = pageIndex + 1;
 
             double slotWidth = sideBySide ? (sheetWidth / 2.0) : sheetWidth;
@@ -188,15 +189,59 @@ namespace XeroxGo.PrinterAgent.Services
             double formW = form.PixelWidth > 0 ? form.PixelWidth : form.PointWidth;
             double formH = form.PixelHeight > 0 ? form.PixelHeight : form.PointHeight;
 
-            double scale = Math.Min(availW / formW, availH / formH);
-            if (scale <= 0) scale = 1.0;
+            string key = (pageIndex + 1).ToString();
+            int rotationAngle = 0;
+            if (rotationsMap != null && rotationsMap.TryGetValue(key, out int angle))
+            {
+                rotationAngle = ((angle % 360) + 360) % 360;
+            }
 
-            double drawW = formW * scale;
-            double drawH = formH * scale;
-            double drawX = offsetX + (slotWidth - drawW) / 2.0;
-            double drawY = offsetY + (slotHeight - drawH) / 2.0;
+            if (rotationAngle == 90 || rotationAngle == 270)
+            {
+                double effFormW = formH;
+                double effFormH = formW;
+                double scale = Math.Min(availW / effFormW, availH / effFormH);
+                if (scale <= 0) scale = 1.0;
 
-            gfx.DrawImage(form, drawX, drawY, drawW, drawH);
+                double origDrawW = formW * scale;
+                double origDrawH = formH * scale;
+                double centerX = offsetX + (slotWidth / 2.0);
+                double centerY = offsetY + (slotHeight / 2.0);
+
+                var state = gfx.Save();
+                gfx.TranslateTransform(centerX, centerY);
+                gfx.RotateTransform(rotationAngle);
+                gfx.DrawImage(form, -origDrawW / 2.0, -origDrawH / 2.0, origDrawW, origDrawH);
+                gfx.Restore(state);
+            }
+            else if (rotationAngle == 180)
+            {
+                double scale = Math.Min(availW / formW, availH / formH);
+                if (scale <= 0) scale = 1.0;
+
+                double origDrawW = formW * scale;
+                double origDrawH = formH * scale;
+                double centerX = offsetX + (slotWidth / 2.0);
+                double centerY = offsetY + (slotHeight / 2.0);
+
+                var state = gfx.Save();
+                gfx.TranslateTransform(centerX, centerY);
+                gfx.RotateTransform(180);
+                gfx.DrawImage(form, -origDrawW / 2.0, -origDrawH / 2.0, origDrawW, origDrawH);
+                gfx.Restore(state);
+            }
+            else
+            {
+                double scale = Math.Min(availW / formW, availH / formH);
+                if (scale <= 0) scale = 1.0;
+
+                double drawW = formW * scale;
+                double drawH = formH * scale;
+                double drawX = offsetX + (slotWidth - drawW) / 2.0;
+                double drawY = offsetY + (slotHeight - drawH) / 2.0;
+
+                gfx.DrawImage(form, drawX, drawY, drawW, drawH);
+            }
         }
     }
 }

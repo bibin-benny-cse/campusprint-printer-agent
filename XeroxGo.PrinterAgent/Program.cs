@@ -69,7 +69,7 @@ namespace XeroxGo.PrinterAgent
             }
             finally
             {
-                _mutex?.ReleaseMutex();
+                try { _mutex?.ReleaseMutex(); } catch { }
                 _mutex?.Dispose();
             }
         }
