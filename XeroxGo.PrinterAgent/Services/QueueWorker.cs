@@ -174,26 +174,11 @@ namespace XeroxGo.PrinterAgent.Services
                 }
             }
 
-            // Fallback: Smart routing based on color mode if no specific printer matched
+            // Fallback: If no target printer specified by cloud or matched, use first online connected printer
             if (string.IsNullOrWhiteSpace(targetPrinter))
             {
-                bool isColor = string.Equals(job.Mode, "Color", StringComparison.OrdinalIgnoreCase);
-                if (isColor)
-                {
-                    var colorPrinter = discoveredPrinters.FirstOrDefault(p => p.SupportsColor && p.IsOnline);
-                    if (colorPrinter != null) targetPrinter = colorPrinter.Name;
-                }
-                else
-                {
-                    var bwPrinter = discoveredPrinters.FirstOrDefault(p => !p.SupportsColor && p.IsOnline);
-                    if (bwPrinter != null) targetPrinter = bwPrinter.Name;
-                }
-            }
-
-            // Ultimate fallback to default physical printer
-            if (string.IsNullOrWhiteSpace(targetPrinter))
-            {
-                targetPrinter = HardwareMonitor.ResolveDefaultPrinter();
+                var firstOnline = discoveredPrinters.FirstOrDefault(p => p.IsOnline);
+                targetPrinter = firstOnline?.Name ?? HardwareMonitor.ResolveDefaultPrinter();
             }
 
             // 1. Atomically claim/lease the job with the unified printer name

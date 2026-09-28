@@ -429,7 +429,7 @@ namespace XeroxGo.PrinterAgent.UI
                     g.FillPath(bgBrush, rowPath);
                     g.DrawPath(borderPen, rowPath);
 
-                    // 2. Status Dot
+                    // 2. Status Dot (Green = Online/Ready, Red = Jammed/Out of paper, Gray = Offline)
                     Color dotColor = printer.IsOnline 
                         ? (printer.IsPaperJammed || printer.IsOutOfPaper ? Color.FromArgb(239, 68, 68) : Color.FromArgb(16, 185, 129))
                         : Color.FromArgb(148, 163, 184);
@@ -437,42 +437,8 @@ namespace XeroxGo.PrinterAgent.UI
                     using var dotBrush = new SolidBrush(dotColor);
                     g.FillEllipse(dotBrush, 12, (h - 8) / 2, 8, 8);
 
-                    // 3. Pill Badges (Right to Left)
-                    int rightX = w - 10;
-                    using var badgeFont = FluentTheme.Font(7.5f);
-
-                    // Status warning pill if jammed, out of paper, or offline
-                    if (printer.IsPaperJammed)
-                    {
-                        DrawPill(g, "JAMMED", Color.FromArgb(254, 242, 242), Color.FromArgb(254, 202, 202), Color.FromArgb(185, 28, 28), ref rightX, h, badgeFont);
-                    }
-                    else if (printer.IsOutOfPaper)
-                    {
-                        DrawPill(g, "OUT OF PAPER", Color.FromArgb(254, 242, 242), Color.FromArgb(254, 202, 202), Color.FromArgb(185, 28, 28), ref rightX, h, badgeFont);
-                    }
-                    else if (!printer.IsOnline)
-                    {
-                        DrawPill(g, "Offline", Color.FromArgb(241, 245, 249), Color.FromArgb(226, 232, 240), Color.FromArgb(100, 116, 139), ref rightX, h, badgeFont);
-                    }
-
-                    // Default printer pill
-                    if (printer.IsDefault)
-                    {
-                        DrawPill(g, "Default", Color.FromArgb(240, 253, 244), Color.FromArgb(187, 247, 208), Color.FromArgb(22, 101, 52), ref rightX, h, badgeFont);
-                    }
-
-                    // Capability pill (Color vs B&W)
-                    if (printer.SupportsColor)
-                    {
-                        DrawPill(g, "Color", Color.FromArgb(239, 246, 255), Color.FromArgb(191, 219, 254), Color.FromArgb(29, 78, 216), ref rightX, h, badgeFont);
-                    }
-                    else
-                    {
-                        DrawPill(g, "B&W", Color.FromArgb(241, 245, 249), Color.FromArgb(226, 232, 240), Color.FromArgb(71, 85, 105), ref rightX, h, badgeFont);
-                    }
-
-                    // 4. Printer Name (Crisp Segoe UI regular, vertically centered with ellipsis if long)
-                    int maxNameWidth = Math.Max(50, rightX - 32);
+                    // 3. Printer Name (Clean Segoe UI regular, vertically centered with ellipsis if long)
+                    int maxNameWidth = w - 40;
                     using var nameFont = FluentTheme.Font(9.25f, FontStyle.Regular);
                     using var nameBrush = new SolidBrush(FluentTheme.TextPrimary);
                     using var format = new StringFormat
@@ -488,29 +454,6 @@ namespace XeroxGo.PrinterAgent.UI
                 _panelPrinters.Controls.Add(rowPanel);
                 itemY += 44;
             }
-        }
-
-        private static void DrawPill(Graphics g, string text, Color bg, Color border, Color fg, ref int rightX, int rowHeight, Font font)
-        {
-            var textSize = g.MeasureString(text, font);
-            int padX = 7;
-            int padY = 2;
-            int pillWidth = (int)Math.Ceiling(textSize.Width) + (padX * 2);
-            int pillHeight = (int)Math.Ceiling(textSize.Height) + (padY * 2);
-            int pillX = rightX - pillWidth;
-            int pillY = (rowHeight - pillHeight) / 2;
-
-            var pillRect = new RectangleF(pillX, pillY, pillWidth, pillHeight);
-            using var pillPath = FluentTheme.CreateRoundedPath(pillRect, 4f);
-            using var bgBrush = new SolidBrush(bg);
-            using var borderPen = new Pen(border, 1f);
-            using var fgBrush = new SolidBrush(fg);
-
-            g.FillPath(bgBrush, pillPath);
-            g.DrawPath(borderPen, pillPath);
-            g.DrawString(text, font, fgBrush, pillX + padX, pillY + padY);
-
-            rightX = pillX - 6;
         }
 
         private void OnToggleKeyVisibility(object? sender, EventArgs e)

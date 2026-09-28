@@ -55,9 +55,7 @@ namespace XeroxGo.PrinterAgent.Services
                     {
                         Name = p.Name,
                         DriverName = p.DriverName,
-                        IsDefault = p.IsDefault,
                         IsOnline = p.IsOnline,
-                        SupportsColor = p.SupportsColor,
                         Status = isThisActive ? "Printing" : p.Status,
                         IsPaperJammed = p.IsPaperJammed,
                         IsOutOfPaper = p.IsOutOfPaper,

@@ -10,9 +10,7 @@ namespace XeroxGo.PrinterAgent.Services
     {
         public string Name { get; set; } = "";
         public string DriverName { get; set; } = "";
-        public bool IsDefault { get; set; }
         public bool IsOnline { get; set; } = true;
-        public bool SupportsColor { get; set; } = false;
         public string Status { get; set; } = "Idle";
         public bool IsPaperJammed { get; set; } = false;
         public bool IsOutOfPaper { get; set; } = false;
@@ -131,14 +129,6 @@ namespace XeroxGo.PrinterAgent.Services
             var allPrinters = GetInstalledPrinters();
             var physicalPrinters = allPrinters.Where(p => !IsVirtualPrinter(p)).ToList();
 
-            string defaultPrinterName = "";
-            try
-            {
-                var settings = new PrinterSettings();
-                defaultPrinterName = settings.PrinterName ?? "";
-            }
-            catch { }
-
             // If no physical printers found at all, fall back to whatever is installed
             var targetList = physicalPrinters.Count > 0 ? physicalPrinters : allPrinters;
 
@@ -147,23 +137,12 @@ namespace XeroxGo.PrinterAgent.Services
                 try
                 {
                     var health = CheckPrinterHealth(printerName);
-                    bool isDefault = string.Equals(printerName, defaultPrinterName, StringComparison.OrdinalIgnoreCase);
-
-                    bool supportsColor = false;
-                    try
-                    {
-                        var s = new PrinterSettings { PrinterName = printerName };
-                        supportsColor = s.SupportsColor;
-                    }
-                    catch { }
 
                     discovered.Add(new DiscoveredPrinter
                     {
                         Name = printerName,
                         DriverName = health.DriverName ?? printerName,
-                        IsDefault = isDefault,
                         IsOnline = health.IsOnline,
-                        SupportsColor = supportsColor,
                         Status = health.StatusSummary,
                         IsPaperJammed = health.IsPaperJammed,
                         IsOutOfPaper = health.IsOutOfPaper,

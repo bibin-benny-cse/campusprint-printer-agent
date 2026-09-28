@@ -92,14 +92,8 @@ namespace XeroxGo.PrinterAgent.Models
         [JsonPropertyName("driverName")]
         public string? DriverName { get; set; }
 
-        [JsonPropertyName("isDefault")]
-        public bool IsDefault { get; set; }
-
         [JsonPropertyName("isOnline")]
         public bool IsOnline { get; set; } = true;
-
-        [JsonPropertyName("supportsColor")]
-        public bool SupportsColor { get; set; } = false;
 
         [JsonPropertyName("status")]
         public string Status { get; set; } = "Idle";
