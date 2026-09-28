@@ -165,7 +165,7 @@ namespace XeroxGo.PrinterAgent.UI
 
             var lblApiUrl = new Label
             {
-                Text = "Cloud Server URL",
+                Text = "Backend API URL",
                 Font = FluentTheme.Font(9f),
                 ForeColor = FluentTheme.TextSecondary,
                 Location = new Point(18, 40),
@@ -182,7 +182,7 @@ namespace XeroxGo.PrinterAgent.UI
 
             var lblApiKey = new Label
             {
-                Text = "Store Key",
+                Text = "Store Secret Key",
                 Font = FluentTheme.Font(9f),
                 ForeColor = FluentTheme.TextSecondary,
                 Location = new Point(18, 102),
@@ -493,7 +493,7 @@ namespace XeroxGo.PrinterAgent.UI
             string url = _txtApiUrl.Text?.Trim() ?? "";
             if (string.IsNullOrWhiteSpace(url) || !Uri.TryCreate(url, UriKind.Absolute, out _))
             {
-                MessageBox.Show("Please enter a valid HTTP/HTTPS Server URL.", "Validation Error", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                MessageBox.Show("Please enter a valid HTTP/HTTPS Backend API URL.", "Validation Error", MessageBoxButtons.OK, MessageBoxIcon.Warning);
                 _txtApiUrl.Focus();
                 return;
             }
