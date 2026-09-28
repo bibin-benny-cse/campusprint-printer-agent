@@ -390,7 +390,7 @@ namespace XeroxGo.PrinterAgent.UI
             {
                 var lblEmpty = new Label
                 {
-                    Text = "No physical printers detected. Plug in a printer and click Refresh.",
+                    Text = "No printers detected.",
                     Font = FluentTheme.Font(9f),
                     ForeColor = FluentTheme.TextSecondary,
                     Dock = DockStyle.Fill,

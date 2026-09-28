@@ -46,7 +46,7 @@ namespace XeroxGo.PrinterAgent.UI
             _pauseResumeItem = new ToolStripMenuItem("⏸️  Pause Printing", null, OnTogglePause);
             _contextMenu.Items.Add(_pauseResumeItem);
 
-            _contextMenu.Items.Add(new ToolStripMenuItem("⚙️  Printer Settings & Pairing...", null, OnOpenSettings));
+            _contextMenu.Items.Add(new ToolStripMenuItem("⚙️  Agent Settings...", null, OnOpenSettings));
             _contextMenu.Items.Add(new ToolStripMenuItem("📄  View Activity Logs", null, OnViewLogs));
             _contextMenu.Items.Add(new ToolStripSeparator());
             _contextMenu.Items.Add(new ToolStripMenuItem("❌  Exit Agent", null, OnExit));
