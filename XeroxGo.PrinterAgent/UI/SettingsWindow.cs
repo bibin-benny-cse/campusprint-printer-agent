@@ -98,38 +98,51 @@ namespace XeroxGo.PrinterAgent.UI
                 BackColor = FluentTheme.Background
             };
 
+            // Direct GDI+ ClearType rendering ensures zero bounding box clipping between title and subtitle
             _headerPanel.Paint += (s, e) =>
             {
                 var g = e.Graphics;
-                g.SmoothingMode = SmoothingMode.AntiAlias;
                 g.TextRenderingHint = TextRenderingHint.ClearTypeGridFit;
 
-                int logoSize = 34;
-                int logoY = 3;
-                int textX = logoSize + 12;
+                TextRenderer.DrawText(g, "XeroxGo Agent", _headerTitleFont, new Point(74, -4), FluentTheme.TextPrimary, TextFormatFlags.NoPadding | TextFormatFlags.SingleLine);
+                TextRenderer.DrawText(g, "By Unnamed Enterprises", _headerSubFont, new Point(74, 20), FluentTheme.TextSecondary, TextFormatFlags.NoPadding | TextFormatFlags.SingleLine);
+            };
 
-                if (BrandAssets.LogoGlyph != null)
+            // Official XeroxGo Logo (Transparent Emblem - 63x32 preserving uncompressed 1.96:1 aspect ratio)
+            var logoBox = new PictureBox
+            {
+                Location = new Point(0, 3),
+                Size = new Size(63, 32),
+                BackColor = Color.Transparent
+            };
+            logoBox.Paint += (s, e) =>
+            {
+                var g = e.Graphics;
+                g.SmoothingMode = SmoothingMode.AntiAlias;
+                g.InterpolationMode = InterpolationMode.HighQualityBicubic;
+                g.PixelOffsetMode = PixelOffsetMode.HighQuality;
+
+                using (var bgBrush = new SolidBrush(FluentTheme.Background))
                 {
-                    g.DrawImage(BrandAssets.LogoGlyph, new Rectangle(0, logoY, logoSize, logoSize));
+                    g.FillRectangle(bgBrush, logoBox.ClientRectangle);
                 }
 
-                float titleY = logoY;
-                g.DrawString("XeroxGo Agent", _headerTitleFont, new SolidBrush(FluentTheme.TextPrimary), textX, titleY);
-
-                float subY = logoY + 18f;
-                g.DrawString("By Unnamed Enterprises", _headerSubFont, new SolidBrush(FluentTheme.TextSecondary), textX, subY);
+                var logo = BrandAssets.LogoGlyph ?? BrandAssets.Logo;
+                if (logo != null)
+                {
+                    g.DrawImage(logo, new Rectangle(0, 0, logoBox.Width, logoBox.Height));
+                }
             };
+            _headerPanel.Controls.Add(logoBox);
 
-            _statusBadge = new FluentStatusBadge
-            {
-                Size = new Size(130, 26)
-            };
+            // Status Badge (Top Right) - vertically centered with XG logo (center Y = 19)
+            _statusBadge = new FluentStatusBadge();
             _statusBadge.SetStatus(currentStatus, statusState);
             _statusBadge.Location = new Point(contentWidth - _statusBadge.Width, 5);
             _headerPanel.Controls.Add(_statusBadge);
 
             Controls.Add(_headerPanel);
-            currentY += 46;
+            currentY += 52;
 
             // ==========================================
             // 2. Card 1: Cloud Connection & Pairing
