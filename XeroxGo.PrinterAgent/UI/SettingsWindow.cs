@@ -301,7 +301,7 @@ namespace XeroxGo.PrinterAgent.UI
 
             _chkAutoStart = new FluentCheckBox
             {
-                Text = "Launch XeroxGo Agent automatically on Windows startup",
+                Text = "Run at startup",
                 Font = FluentTheme.Font(9f),
                 Location = new Point(18, 104),
                 Size = new Size(contentWidth - 36, 24)
