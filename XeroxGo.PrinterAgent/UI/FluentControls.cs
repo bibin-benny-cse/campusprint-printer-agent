@@ -251,7 +251,8 @@ namespace XeroxGo.PrinterAgent.UI
 
         public TextBox InnerTextBox => _textBox;
 
-        public override string? Text
+        [System.Diagnostics.CodeAnalysis.AllowNull]
+        public override string Text
         {
             get => _textBox.Text;
             set => _textBox.Text = value ?? "";

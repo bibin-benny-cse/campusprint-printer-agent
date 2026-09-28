@@ -205,12 +205,12 @@ namespace XeroxGo.PrinterAgent.UI
             var cardHardware = new FluentCard
             {
                 Location = new Point(marginX, currentY),
-                Size = new Size(contentWidth, 190)
+                Size = new Size(contentWidth, 184)
             };
 
             var lblHwHeader = new Label
             {
-                Text = "Connected Printers (Auto-Discovered)",
+                Text = "Connected Printers",
                 Font = FluentTheme.Font(10.5f, FontStyle.Bold),
                 ForeColor = FluentTheme.TextPrimary,
                 Location = new Point(18, 14),
@@ -221,34 +221,24 @@ namespace XeroxGo.PrinterAgent.UI
             _btnRefreshPrinters = new FluentButton
             {
                 Text = "Refresh",
-                Location = new Point(contentWidth - 18 - 84, 10),
-                Size = new Size(84, 26),
+                Location = new Point(contentWidth - 18 - 80, 10),
+                Size = new Size(80, 26),
                 IsPrimary = false
             };
             _btnRefreshPrinters.Click += (s, e) => PopulateDiscoveredPrinters();
             cardHardware.Controls.Add(_btnRefreshPrinters);
 
-            var lblHwSub = new Label
-            {
-                Text = "Zero setup needed. Connected printers are auto-synced with your XeroxGo dashboard.",
-                Font = FluentTheme.Font(8.5f),
-                ForeColor = FluentTheme.TextSecondary,
-                Location = new Point(18, 38),
-                AutoSize = true
-            };
-            cardHardware.Controls.Add(lblHwSub);
-
             _panelPrinters = new Panel
             {
-                Location = new Point(18, 60),
-                Size = new Size(contentWidth - 36, 116),
+                Location = new Point(18, 46),
+                Size = new Size(contentWidth - 36, 122),
                 AutoScroll = true,
-                BackColor = Color.FromArgb(248, 250, 252)
+                BackColor = Color.White
             };
             cardHardware.Controls.Add(_panelPrinters);
 
             Controls.Add(cardHardware);
-            currentY += 202;
+            currentY += 196;
 
             // ==========================================
             // 4. Card 3: Operational Telemetry
@@ -387,7 +377,7 @@ namespace XeroxGo.PrinterAgent.UI
             {
                 var lblEmpty = new Label
                 {
-                    Text = "No physical printers detected. Plug in a USB or network printer and click Refresh.",
+                    Text = "No physical printers detected. Plug in a printer and click Refresh.",
                     Font = FluentTheme.Font(9f),
                     ForeColor = FluentTheme.TextSecondary,
                     Dock = DockStyle.Fill,
@@ -397,52 +387,117 @@ namespace XeroxGo.PrinterAgent.UI
                 return;
             }
 
-            int itemY = 4;
-            int itemWidth = _panelPrinters.ClientSize.Width - 8;
+            int itemY = 2;
+            int itemWidth = _panelPrinters.ClientSize.Width - (discovered.Count > 2 ? 8 : 4);
 
             foreach (var printer in discovered)
             {
                 var rowPanel = new Panel
                 {
-                    Location = new Point(4, itemY),
-                    Size = new Size(itemWidth, 34),
-                    BackColor = Color.White
+                    Location = new Point(2, itemY),
+                    Size = new Size(itemWidth, 38),
+                    BackColor = Color.FromArgb(248, 250, 252)
                 };
 
                 rowPanel.Paint += (s, e) =>
                 {
                     var g = e.Graphics;
                     g.SmoothingMode = SmoothingMode.AntiAlias;
+                    g.TextRenderingHint = TextRenderingHint.ClearTypeGridFit;
 
-                    // Status dot
+                    int w = rowPanel.Width;
+                    int h = rowPanel.Height;
+
+                    // 1. Soft rounded card container with crisp border
+                    var rowRect = new RectangleF(0.5f, 0.5f, w - 1f, h - 1f);
+                    using var rowPath = FluentTheme.CreateRoundedPath(rowRect, 6f);
+                    using var bgBrush = new SolidBrush(Color.FromArgb(248, 250, 252));
+                    using var borderPen = new Pen(Color.FromArgb(226, 232, 240), 1f);
+                    g.FillPath(bgBrush, rowPath);
+                    g.DrawPath(borderPen, rowPath);
+
+                    // 2. Status Dot
                     Color dotColor = printer.IsOnline 
                         ? (printer.IsPaperJammed || printer.IsOutOfPaper ? Color.FromArgb(239, 68, 68) : Color.FromArgb(16, 185, 129))
-                        : Color.FromArgb(156, 163, 175);
+                        : Color.FromArgb(148, 163, 184);
 
                     using var dotBrush = new SolidBrush(dotColor);
-                    g.FillEllipse(dotBrush, 10, 12, 10, 10);
+                    g.FillEllipse(dotBrush, 12, (h - 8) / 2, 8, 8);
 
-                    // Printer Name
-                    using var nameFont = FluentTheme.Font(9.5f, FontStyle.Bold);
+                    // 3. Pill Badges (Right to Left)
+                    int rightX = w - 10;
+                    using var badgeFont = FluentTheme.Font(7.5f);
+
+                    // Status warning pill if jammed, out of paper, or offline
+                    if (printer.IsPaperJammed)
+                    {
+                        DrawPill(g, "JAMMED", Color.FromArgb(254, 242, 242), Color.FromArgb(254, 202, 202), Color.FromArgb(185, 28, 28), ref rightX, h, badgeFont);
+                    }
+                    else if (printer.IsOutOfPaper)
+                    {
+                        DrawPill(g, "OUT OF PAPER", Color.FromArgb(254, 242, 242), Color.FromArgb(254, 202, 202), Color.FromArgb(185, 28, 28), ref rightX, h, badgeFont);
+                    }
+                    else if (!printer.IsOnline)
+                    {
+                        DrawPill(g, "Offline", Color.FromArgb(241, 245, 249), Color.FromArgb(226, 232, 240), Color.FromArgb(100, 116, 139), ref rightX, h, badgeFont);
+                    }
+
+                    // Default printer pill
+                    if (printer.IsDefault)
+                    {
+                        DrawPill(g, "Default", Color.FromArgb(240, 253, 244), Color.FromArgb(187, 247, 208), Color.FromArgb(22, 101, 52), ref rightX, h, badgeFont);
+                    }
+
+                    // Capability pill (Color vs B&W)
+                    if (printer.SupportsColor)
+                    {
+                        DrawPill(g, "Color", Color.FromArgb(239, 246, 255), Color.FromArgb(191, 219, 254), Color.FromArgb(29, 78, 216), ref rightX, h, badgeFont);
+                    }
+                    else
+                    {
+                        DrawPill(g, "B&W", Color.FromArgb(241, 245, 249), Color.FromArgb(226, 232, 240), Color.FromArgb(71, 85, 105), ref rightX, h, badgeFont);
+                    }
+
+                    // 4. Printer Name (Crisp Segoe UI regular, vertically centered with ellipsis if long)
+                    int maxNameWidth = Math.Max(50, rightX - 32);
+                    using var nameFont = FluentTheme.Font(9.25f, FontStyle.Regular);
                     using var nameBrush = new SolidBrush(FluentTheme.TextPrimary);
-                    g.DrawString(printer.Name, nameFont, nameBrush, 28, 8);
+                    using var format = new StringFormat
+                    {
+                        LineAlignment = StringAlignment.Center,
+                        Trimming = StringTrimming.EllipsisCharacter,
+                        FormatFlags = StringFormatFlags.NoWrap
+                    };
 
-                    // Badges (Color / Default / Status)
-                    string badgeText = printer.SupportsColor ? "Color" : "B&W";
-                    if (printer.IsDefault) badgeText += " • Default";
-                    if (printer.IsPaperJammed) badgeText += " • JAMMED";
-                    else if (printer.IsOutOfPaper) badgeText += " • OUT OF PAPER";
-                    else if (!printer.IsOnline) badgeText += " • Offline";
-
-                    using var badgeFont = FluentTheme.Font(8f);
-                    using var badgeBrush = new SolidBrush(FluentTheme.TextSecondary);
-                    var badgeSize = g.MeasureString(badgeText, badgeFont);
-                    g.DrawString(badgeText, badgeFont, badgeBrush, rowPanel.Width - badgeSize.Width - 10, 10);
+                    g.DrawString(printer.Name, nameFont, nameBrush, new RectangleF(28, 0, maxNameWidth, h), format);
                 };
 
                 _panelPrinters.Controls.Add(rowPanel);
-                itemY += 38;
+                itemY += 44;
             }
+        }
+
+        private static void DrawPill(Graphics g, string text, Color bg, Color border, Color fg, ref int rightX, int rowHeight, Font font)
+        {
+            var textSize = g.MeasureString(text, font);
+            int padX = 7;
+            int padY = 2;
+            int pillWidth = (int)Math.Ceiling(textSize.Width) + (padX * 2);
+            int pillHeight = (int)Math.Ceiling(textSize.Height) + (padY * 2);
+            int pillX = rightX - pillWidth;
+            int pillY = (rowHeight - pillHeight) / 2;
+
+            var pillRect = new RectangleF(pillX, pillY, pillWidth, pillHeight);
+            using var pillPath = FluentTheme.CreateRoundedPath(pillRect, 4f);
+            using var bgBrush = new SolidBrush(bg);
+            using var borderPen = new Pen(border, 1f);
+            using var fgBrush = new SolidBrush(fg);
+
+            g.FillPath(bgBrush, pillPath);
+            g.DrawPath(borderPen, pillPath);
+            g.DrawString(text, font, fgBrush, pillX + padX, pillY + padY);
+
+            rightX = pillX - 6;
         }
 
         private void OnToggleKeyVisibility(object? sender, EventArgs e)
@@ -479,7 +534,7 @@ namespace XeroxGo.PrinterAgent.UI
 
         private void OnSave(object? sender, EventArgs e)
         {
-            string url = _txtApiUrl.Text.Trim();
+            string url = _txtApiUrl.Text?.Trim() ?? "";
             if (string.IsNullOrWhiteSpace(url) || !Uri.TryCreate(url, UriKind.Absolute, out _))
             {
                 MessageBox.Show("Please enter a valid absolute HTTP/HTTPS API URL.", "Validation Error", MessageBoxButtons.OK, MessageBoxIcon.Warning);
@@ -488,7 +543,7 @@ namespace XeroxGo.PrinterAgent.UI
             }
 
             _config.ApiUrl = url;
-            _config.AgentApiKey = _txtApiKey.Text.Trim();
+            _config.AgentApiKey = _txtApiKey.Text?.Trim() ?? "";
 
             // Parse selected poll interval
             int pollSeconds = 3;
